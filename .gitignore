@@ -1,24 +1,53 @@
-# Compiled class file
+# ─────────────────────────────────────────────
+# SECRETS — never commit these
+# ─────────────────────────────────────────────
+.env
+.env.local
+*.env
+
+# ─────────────────────────────────────────────
+# JAVA / SPRING BOOT (fundflow-bff)
+# ─────────────────────────────────────────────
+fundflow-bff/target/
+fundflow-bff/.mvn/wrapper/maven-wrapper.jar
+fundflow-bff/*.jar
+fundflow-bff/*.war
 *.class
 
-# Log file
-*.log
+# IDE
+.idea/
+*.iml
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
 
-# BlueJ files
-*.ctxt
+# ─────────────────────────────────────────────
+# REACT / NODE (fundflow-app)
+# ─────────────────────────────────────────────
+fundflow-app/node_modules/
+fundflow-app/dist/
+fundflow-app/.vite/
+fundflow-app/coverage/
 
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
+# ─────────────────────────────────────────────
+# PYTHON (fundflow-core)
+# ─────────────────────────────────────────────
+fundflow-core/__pycache__/
+fundflow-core/*.pyc
+fundflow-core/.venv/
+fundflow-core/venv/
+fundflow-core/*.egg-info/
 
-# Package Files #
-*.jar
-*.war
-*.nar
-*.ear
-*.zip
-*.tar.gz
-*.rar
+# ─────────────────────────────────────────────
+# DOCKER
+# ─────────────────────────────────────────────
+# Keep docker-compose.yml but ignore overrides
+docker-compose.override.yml
 
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*
+# ─────────────────────────────────────────────
+# OS
+# ─────────────────────────────────────────────
+.DS_Store
+Thumbs.db
