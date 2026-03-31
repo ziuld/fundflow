@@ -1,0 +1,126 @@
+# FundFlow — docker-compose.yml
+# Defines the full local environment: MongoDB, BFF, React app, and Python seeder.
+# Run with: docker compose up --build
+# Stop with: docker compose down
+# Wipe data:  docker compose down -v  (removes the MongoDB volume too)
+
+# ─────────────────────────────────────────────
+# NETWORK
+# All services join "fundflow-net" so they can
+# reach each other by service name, not by IP.
+# Example: BFF connects to "mongodb:27017"
+# ─────────────────────────────────────────────
+networks:
+  fundflow-net:
+    driver: bridge
+
+# ─────────────────────────────────────────────
+# VOLUMES
+# Persistent storage for MongoDB data.
+# Without this, every "docker compose down"
+# would wipe your entire database.
+# ─────────────────────────────────────────────
+volumes:
+  mongo-data:
+
+services:
+
+  # ───────────────────────────────────────────
+  # 1. MONGODB
+  # The database. Starts first because BFF and
+  # the seeder both depend on it being healthy.
+  # ───────────────────────────────────────────
+  mongodb:
+    image: mongo:7.0
+    container_name: fundflow-mongodb
+    ports:
+      - "27017:27017"          # host:container — lets you connect from Compass or Mongosh on your PC
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: fundflow
+      MONGO_INITDB_ROOT_PASSWORD: fundflow123
+      MONGO_INITDB_DATABASE: fundflowdb
+    volumes:
+      - mongo-data:/data/db   # persist data across restarts
+    networks:
+      - fundflow-net
+    healthcheck:
+      # mongosh ping — only passes when MongoDB is fully accepting connections
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')", "--quiet"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s       # give MongoDB time to init before first check
+
+  # ───────────────────────────────────────────
+  # 2. PYTHON SEEDER
+  # Runs once, inserts fund data into MongoDB,
+  # then exits. "depends_on" with condition
+  # ensures MongoDB is healthy before it runs.
+  # ───────────────────────────────────────────
+  fundflow-core:
+    build:
+      context: ./fundflow-core
+      dockerfile: Dockerfile
+    container_name: fundflow-seeder
+    environment:
+      MONGO_URI: mongodb://fundflow:fundflow123@mongodb:27017/fundflowdb?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy   # waits for the healthcheck above to pass
+    networks:
+      - fundflow-net
+    restart: "no"                    # run once and exit — not a long-running service
+
+  # ───────────────────────────────────────────
+  # 3. BFF — Java 21 + Spring Boot
+  # The backend. Exposes REST on port 8080.
+  # Waits for MongoDB to be healthy before
+  # starting (avoids connection refused on boot).
+  # ───────────────────────────────────────────
+  fundflow-bff:
+    build:
+      context: ./fundflow-bff
+      dockerfile: Dockerfile
+    container_name: fundflow-bff
+    ports:
+      - "8080:8080"
+    environment:
+      SPRING_DATA_MONGODB_URI: mongodb://fundflow:fundflow123@mongodb:27017/fundflowdb?authSource=admin
+      SPRING_DATA_MONGODB_DATABASE: fundflowdb
+      GEMINI_API_KEY: ${GEMINI_API_KEY}   # injected from your .env file — never hardcode API keys
+      SPRING_APPLICATION_JSON: '{"spring":{"data":{"mongodb":{"uri":"mongodb://fundflow:fundflow123@mongodb:27017/fundflowdb?authSource=admin"}}}}'
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      fundflow-core:
+        condition: service_completed_successfully  # seeder must finish before BFF starts
+    networks:
+      - fundflow-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/actuator/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s       # Spring Boot takes longer to start than MongoDB
+
+  # ───────────────────────────────────────────
+  # 4. REACT APP
+  # The frontend. In dev mode uses Vite dev
+  # server on port 3000 with hot reload.
+  # Waits for BFF to be healthy so the API
+  # is available when the UI loads.
+  # ───────────────────────────────────────────
+  fundflow-app:
+    build:
+      context: ./fundflow-app
+      dockerfile: Dockerfile
+    container_name: fundflow-app
+    ports:
+      - "3000:3000"
+    environment:
+      VITE_API_BASE_URL: http://localhost:8080   # React talks to BFF via the host machine
+    depends_on:
+      fundflow-bff:
+        condition: service_healthy
+    networks:
+      - fundflow-net

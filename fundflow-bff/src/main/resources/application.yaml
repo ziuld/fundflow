@@ -1,0 +1,35 @@
+spring:
+  application:
+    name: fundflow-bff
+
+  data:
+    mongodb:
+      # When running inside Docker, this comes from the environment variable
+      # set in docker-compose.yml. When running locally outside Docker,
+      # it falls back to localhost.
+      uri: ${SPRING_DATA_MONGODB_URI:mongodb://fundflow:fundflow123@localhost:27017/fundflowdb?authSource=admin}
+
+server:
+  port: 8080
+
+# Actuator — exposes /actuator/health which Docker uses for healthchecks
+# Without this, docker-compose would never mark the BFF as "healthy"
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+# Gemini API key — injected from environment, never hardcoded
+gemini:
+  api:
+    key: ${GEMINI_API_KEY:}
+
+# Logging — useful during development
+logging:
+  level:
+    com.fundflow: DEBUG
+    org.springframework.data.mongodb: DEBUG
