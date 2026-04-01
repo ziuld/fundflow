@@ -17,6 +17,9 @@ COPY mvnw .
 COPY .mvn .mvn
 COPY pom.xml .
 
+# Fix execute permissions — git doesn't always preserve them
+RUN chmod +x mvnw
+
 # Download dependencies (cached layer)
 RUN ./mvnw dependency:go-offline -B
 
