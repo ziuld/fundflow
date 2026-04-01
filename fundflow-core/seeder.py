@@ -15,8 +15,11 @@ MONGO_URI = os.getenv(
 )
 DATABASE_NAME = "fundflowdb"
 COLLECTION_NAME = "funds"
-CSV_PATH = os.path.join(os.path.dirname(__file__), "data", "funds_cleaned.csv")
-
+# Replace the single CSV_PATH with a list
+CSV_FILES = [
+    os.path.join(os.path.dirname(__file__), "data", "funds.csv"),
+    os.path.join(os.path.dirname(__file__), "data", "funds_supplemental.csv"),
+]
 
 def connect_to_mongodb():
     """Connect to MongoDB and return the collection."""
@@ -91,11 +94,21 @@ def main():
     print("=" * 50)
 
     collection = connect_to_mongodb()
-    funds = parse_csv(CSV_PATH)
-    inserted, skipped = seed(collection, funds)
+    
+    total_inserted = 0
+    total_skipped = 0
+
+    for csv_file in CSV_FILES:
+        if not os.path.exists(csv_file):
+            print(f"Skipping {csv_file} — file not found")
+            continue
+        funds = parse_csv(csv_file)
+        inserted, skipped = seed(collection, funds)
+        total_inserted += inserted
+        total_skipped += skipped
 
     print("=" * 50)
-    print(f"Done. Inserted: {inserted} | Skipped: {skipped}")
+    print(f"Done. Inserted: {total_inserted} | Skipped: {total_skipped}")
     print("=" * 50)
 
 
