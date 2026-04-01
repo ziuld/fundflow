@@ -96,11 +96,9 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Validate CSV exists and is readable
-        working-directory: ./fundflow-core
         run: |
-          python -c "import csv; rows = list(csv.DictReader(open('data/funds.csv'))); assert len(rows) > 0; assert 'isin' in rows[0]; print(f'funds.csv OK: {len(rows)} funds')"
-          python -c "import csv; rows = list(csv.DictReader(open('data/funds_supplemental.csv'))); assert len(rows) > 0; assert 'isin' in rows[0]; print(f'funds_supplemental.csv OK: {len(rows)} funds')"
-
+          python -c "import csv; rows = list(csv.DictReader(open('fundflow-core/data/funds.csv'))); assert len(rows) > 0; assert 'isin' in rows[0]; print(f'funds.csv OK: {len(rows)} funds')"
+          python -c "import csv; rows = list(csv.DictReader(open('fundflow-core/data/funds_supplemental.csv'))); assert len(rows) > 0; assert 'isin' in rows[0]; print(f'funds_supplemental.csv OK: {len(rows)} funds')"
   # ─────────────────────────────────────────────
   # JOB 4 — Docker Compose validation
   # Runs after all three builds pass
