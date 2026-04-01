@@ -2,20 +2,20 @@ import { useState, useEffect } from 'react'
 import {
   Table, TableBody, TableCell, TableContainer,
   TableHead, TableRow, Paper, Chip, Typography,
-  CircularProgress, Box, Alert, TextField, MenuItem
+  CircularProgress, Box, Alert, TextField, MenuItem,
+  IconButton
 } from '@mui/material'
 import TrendingUpIcon from '@mui/icons-material/TrendingUp'
 import TrendingDownIcon from '@mui/icons-material/TrendingDown'
+import SmartToyIcon from '@mui/icons-material/SmartToy'
 import { fundApi } from '../services/fundApi'
 
-// Maps risk level to MUI Chip color
 const riskColor = {
   Low: 'success',
   Medium: 'warning',
   High: 'error',
 }
 
-// Shows a green or red trend icon + value depending on sign
 function ReturnCell({ value }) {
   if (value == null) return <TableCell>—</TableCell>
   const positive = value >= 0
@@ -36,13 +36,12 @@ function ReturnCell({ value }) {
   )
 }
 
-export default function FundsTable() {
+export default function FundsTable({ onChatOpen }) {
   const [funds, setFunds] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [categoryFilter, setCategoryFilter] = useState('')
 
-  // Fetch funds on mount and when category filter changes
   useEffect(() => {
     setLoading(true)
     const request = categoryFilter
@@ -53,7 +52,7 @@ export default function FundsTable() {
       .then(res => setFunds(res.data))
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
-  }, [categoryFilter]) // re-runs every time categoryFilter changes
+  }, [categoryFilter])
 
   if (loading) return (
     <Box display="flex" justifyContent="center" mt={4}>
@@ -69,7 +68,6 @@ export default function FundsTable() {
 
   return (
     <Box>
-      {/* Filter */}
       <TextField
         select
         label="Filter by category"
@@ -84,12 +82,11 @@ export default function FundsTable() {
         <MenuItem value="Money Market">Money Market</MenuItem>
       </TextField>
 
-      {/* Table */}
       <TableContainer component={Paper} elevation={2}>
         <Table size="small">
           <TableHead>
             <TableRow sx={{ backgroundColor: 'primary.main' }}>
-              {['Fund name', 'Category', 'Risk', 'YTD', '1Y', '3Y', 'AUM (M€)', 'ISIN'].map(h => (
+              {['Fund name', 'Category', 'Risk', 'YTD', '1Y', '3Y', 'AUM (M€)', 'ISIN', 'AI Chat'].map(h => (
                 <TableCell key={h} sx={{ color: 'white', fontWeight: 600 }}>{h}</TableCell>
               ))}
             </TableRow>
@@ -97,7 +94,7 @@ export default function FundsTable() {
           <TableBody>
             {funds.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} align="center">
+                <TableCell colSpan={9} align="center">
                   No funds found. Run the Python seeder to load data.
                 </TableCell>
               </TableRow>
@@ -121,12 +118,17 @@ export default function FundsTable() {
                   <ReturnCell value={fund.returnOneYear} />
                   <ReturnCell value={fund.returnThreeYear} />
                   <TableCell>
-                    {fund.aum?.toLocaleString('de-US', { maximumFractionDigits: 0 })}
+                    {fund.aum?.toLocaleString('en-US', { maximumFractionDigits: 0 })}
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" fontFamily="monospace">
                       {fund.isin}
                     </Typography>
+                  </TableCell>
+                  <TableCell>
+                    <IconButton size="small" color="primary" onClick={() => onChatOpen(fund)}>
+                      <SmartToyIcon fontSize="small" />
+                    </IconButton>
                   </TableCell>
                 </TableRow>
               ))
