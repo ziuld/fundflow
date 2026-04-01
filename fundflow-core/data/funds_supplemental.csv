@@ -1,12 +1,12 @@
-Fund Name,Category,Risk,YTD (%),1Y (%),3Y (%),AUM (M€),ISIN
-PIMCO GIS Income Fund E,Bond,3,0.82,6.18,3.37,65400,IE00B84J9L26
-Vanguard Global Bond Index,Bond,3,0.42,3.94,-2.1,22150,IE00B18GC888
-Vanguard LifeStrategy 60%,Mixed,4,2.15,13.6,36.4,14200,GB00B4L30D52
-BlackRock ICS Euro Liquidity,Money Market,1,0.75,3.85,6.04,18900,IE00B44QSK78
-Royal London Short Term MM,Money Market,1,0.9,1.5,4.0,5800,GB00B6X1B762
-iShares 20+ Year Treasury Bond ETF,Bond,4,1.9,3.0,-2.5,45065,US4642874329
-iShares 7-10 Year Treasury ETF,Bond,3,0.85,1.3,2.7,12000,US4642874402
-iShares 3-7 Year Treasury ETF,Bond,2,0.6,1.8,3.5,8200,US4642874576
-iShares 1-3 Year Treasury ETF,Bond,1,0.4,1.2,2.0,6000,US4642874576
-iShares Euro Government Bond 10-15yr,Bond,3,0.5,2.0,1.8,9000,IE00B1FZS350
-iShares Germany Govt Bond UCITS ETF,Bond,2,0.3,1.5,1.2,7500,DE000A0Q4RZ9
+name,category,riskLevel,returnYtd,returnOneYear,returnThreeYear,aum,currency,isin,description,YTD,1Y,3Y,Risk
+PIMCO GIS Income Fund E,Bond,Medium,0.82,6.18,3.37,65400,EUR,IE00B84J9L26,Global multi-sector bond fund focusing on income generation with diversified fixed income exposure.,0.82,6.18,3.37,3.0
+Vanguard Global Bond Index,Bond,Medium,0.42,3.94,-2.1,22150,EUR,IE00B18GC888,Passive global bond index fund tracking investment-grade government and corporate bonds.,0.42,3.94,-2.1,3.0
+Vanguard LifeStrategy 60%,Mixed,Medium,2.15,13.6,36.4,14200,GBP,GB00B4L30D52,Multi-asset fund with 60 percent equity exposure and 40 percent bonds for balanced growth.,2.15,13.6,36.4,4.0
+BlackRock ICS Euro Liquidity,Money Market,Low,0.75,3.85,6.04,18900,EUR,IE00B44QSK78,Short-term euro liquidity fund focusing on capital preservation and daily liquidity.,0.75,3.85,6.04,1.0
+Royal London Short Term MM,Money Market,Low,0.9,1.5,4.0,5800,GBP,GB00B6X1B762,Short-term money market fund investing in high-quality liquid instruments.,0.9,1.5,4.0,1.0
+iShares 20+ Year Treasury Bond ETF,Bond,High,1.9,3.0,-2.5,45065,USD,US4642874329,ETF tracking long-duration US Treasury bonds with high interest rate sensitivity.,1.9,3.0,-2.5,4.0
+iShares 7-10 Year Treasury ETF,Bond,Medium,0.85,1.3,2.7,12000,USD,US4642874402,ETF tracking intermediate-term US Treasury bonds.,0.85,1.3,2.7,3.0
+iShares 3-7 Year Treasury ETF,Bond,Low,0.6,1.8,3.5,8200,USD,US4642874576,ETF tracking short-to-intermediate US Treasury bonds.,0.6,1.8,3.5,2.0
+iShares 1-3 Year Treasury ETF,Bond,Low,0.4,1.2,2.0,6000,USD,US4642874576,ETF tracking short-duration US Treasury bonds with low volatility.,0.4,1.2,2.0,1.0
+iShares Euro Government Bond 10-15yr,Bond,Medium,0.5,2.0,1.8,9000,EUR,IE00B1FZS350,ETF tracking eurozone government bonds with 10 to 15 year maturity.,0.5,2.0,1.8,3.0
+iShares Germany Govt Bond UCITS ETF,Bond,Low,0.3,1.5,1.2,7500,EUR,DE000A0Q4RZ9,ETF focused on German government bonds offering high credit quality exposure.,0.3,1.5,1.2,2.0
