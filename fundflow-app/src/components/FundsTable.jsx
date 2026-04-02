@@ -49,7 +49,11 @@ export default function FundsTable({ onChatOpen }) {
       : fundApi.getAllFunds()
 
     request
-      .then(res => setFunds(res.data))
+      .then(res => {
+        console.log('API response:', res)
+        console.log('API data:', res.data)
+        setFunds(res.data)
+      })
       .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [categoryFilter])
