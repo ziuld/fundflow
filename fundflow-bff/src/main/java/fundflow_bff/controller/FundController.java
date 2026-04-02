@@ -23,7 +23,7 @@ import java.util.List;
 @RequestMapping("/api/v1/funds")
 @RequiredArgsConstructor
 @Slf4j
-@CrossOrigin(origins = "http://localhost:3000") // allows React dev server to call this API
+@CrossOrigin(origins = "*") // allows React dev server to call this API
 public class FundController {
 
     private final FundService fundService;
