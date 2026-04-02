@@ -3,7 +3,7 @@ import axios from 'axios'
 // All API calls use relative paths — Vite proxy forwards them to the BFF.
 // In production, an nginx reverse proxy would do the same job.
 const api = axios.create({
-  baseURL: '/api/v1',
+  baseURL: `${import.meta.env.VITE_API_BASE_URL || ''}/api/v1`,
   headers: {
     'Content-Type': 'application/json',
   },
