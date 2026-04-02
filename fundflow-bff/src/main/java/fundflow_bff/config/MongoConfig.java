@@ -10,7 +10,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 @Configuration
 public class MongoConfig {
 
-    @Value("${SPRING_DATA_MONGODB_URI:mongodb://fundflow:fundflow123@localhost:27017/fundflowdb?authSource=admin}")
+    @Value("${SPRING_DATA_MONGODB_URI:mongodb://localhost:27017/fundflowdb}")
     private String mongoUri;
 
     @Bean
