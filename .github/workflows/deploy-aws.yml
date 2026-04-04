@@ -1,0 +1,88 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FundFlow — Deploy to AWS ECS Fargate
+#
+# STATUS: IN PROGRESS — ECS stack not yet created
+#
+# What this will do:
+#   1. Authenticate to AWS via OIDC (no static keys)
+#   2. Build BFF and React Docker images
+#   3. Push to Amazon ECR
+#   4. Register new ECS task definitions
+#   5. Update ECS services to deploy new revisions
+#
+# Required GitHub secrets:
+#   - AWS_ROLE_ARN      → IAM role ARN for OIDC authentication
+#   - AWS_REGION        → eu-west-1
+#   - BFF_ECR_REPO      → ECR repository URI for BFF
+#   - APP_ECR_REPO      → ECR repository URI for React app
+#   - BFF_URL           → ALB DNS name for VITE_API_BASE_URL injection
+#
+# Architecture:
+#   Internet → WAF → ALB (public subnet) → ECS Fargate (private subnet)
+#   Secrets injected at runtime from AWS Secrets Manager via IAM role
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy — AWS ECS Fargate
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-west-1
+
+jobs:
+  deploy:
+    name: Deploy to ECS Fargate
+    runs-on: ubuntu-latest
+    if: false  # DISABLED — will be enabled once ECS stack is ready
+    permissions:
+      id-token: write   # required for OIDC authentication
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # OIDC authentication — no static AWS keys stored anywhere
+      # GitHub Actions receives a short-lived token (15min) from AWS
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── BFF ───────────────────────────────────────────────────────────────
+      - name: Build and push BFF image
+        run: |
+          docker build \
+            -t ${{ secrets.BFF_ECR_REPO }}:${{ github.sha }} \
+            -t ${{ secrets.BFF_ECR_REPO }}:latest \
+            ./fundflow-bff
+          docker push ${{ secrets.BFF_ECR_REPO }}:${{ github.sha }}
+          docker push ${{ secrets.BFF_ECR_REPO }}:latest
+
+      # ── React app ─────────────────────────────────────────────────────────
+      - name: Build and push React image
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL=${{ secrets.BFF_URL }} \
+            -t ${{ secrets.APP_ECR_REPO }}:${{ github.sha }} \
+            -t ${{ secrets.APP_ECR_REPO }}:latest \
+            ./fundflow-app
+          docker push ${{ secrets.APP_ECR_REPO }}:${{ github.sha }}
+          docker push ${{ secrets.APP_ECR_REPO }}:latest
+
+      # ── ECS deploy ────────────────────────────────────────────────────────
+      # TODO: add task definition update + ecs service update steps
+      # These will be added once the ECS CloudFormation stack is created
+
+      - name: Print deployment info
+        run: |
+          echo "================================"
+          echo "BFF image : ${{ secrets.BFF_ECR_REPO }}:${{ github.sha }}"
+          echo "App image : ${{ secrets.APP_ECR_REPO }}:${{ github.sha }}"
+          echo "================================"

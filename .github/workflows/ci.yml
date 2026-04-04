@@ -1,34 +1,35 @@
-name: FundFlow CI/CD
+# ─────────────────────────────────────────────────────────────────────────────
+# FundFlow — Continuous Integration
+#
+# Runs on every push to main and develop, and on every PR targeting main.
+# Validates all three services in parallel — Java BFF, React app, Python seeder.
+# All jobs must pass before any deployment workflow can trigger.
+#
+# Deployment is handled by separate workflow files:
+#   - deploy-gcp.yml  → Google Cloud Run  (disabled)
+#   - deploy-aws.yml  → AWS ECS Fargate   (active)
+# ─────────────────────────────────────────────────────────────────────────────
+name: CI
 
-# ─────────────────────────────────────────────
-# TRIGGERS
-# CI runs on every push to main and develop,
-# and on every pull request targeting main.
-# CD (deploy job) only runs on push to main.
-# ─────────────────────────────────────────────
 on:
   push:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
 
-env:
-  GCP_REGION: europe-west1
-  REGISTRY: europe-west1-docker.pkg.dev
-  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-
 jobs:
 
-  # ─────────────────────────────────────────────
-  # JOB 1 — BFF: Build and test
-  # Compiles the Spring Boot JAR and runs tests.
-  # Runs in parallel with app-build and core-validate.
-  # ─────────────────────────────────────────────
-  bff-build:
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 1 — BFF: compile and test
+  #
+  # Uses Maven to compile the Spring Boot project and run all unit tests.
+  # The JAR artifact is uploaded so deploy jobs can reuse it without rebuilding.
+  # ───────────────────────────────────────────────────────────────────────────
+  bff-ci:
     name: BFF — Build & Test
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Java 21
@@ -36,32 +37,30 @@ jobs:
         with:
           java-version: '21'
           distribution: 'temurin'
-          cache: maven          # caches ~/.m2 between runs for faster builds
+          cache: maven
 
-      - name: Build and test with Maven
+      - name: Build and test
         working-directory: ./fundflow-bff
         run: mvn clean package -B
-        # -B = batch mode (no interactive prompts, cleaner CI logs)
-        # clean package = compile + run tests + package into JAR
 
-      - name: Upload JAR artifact
+      - name: Upload JAR
         uses: actions/upload-artifact@v4
         with:
           name: fundflow-bff-jar
           path: fundflow-bff/target/*.jar
           retention-days: 7
 
-  # ─────────────────────────────────────────────
-  # JOB 2 — React app: Build
-  # Installs dependencies and builds the Vite
-  # production bundle. Runs in parallel with
-  # bff-build and core-validate.
-  # ─────────────────────────────────────────────
-  app-build:
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 2 — React app: install, build
+  #
+  # Uses npm ci (faster than npm install, uses package-lock.json exactly)
+  # and builds the Vite production bundle.
+  # ───────────────────────────────────────────────────────────────────────────
+  app-ci:
     name: React App — Build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Node 20
@@ -74,29 +73,29 @@ jobs:
       - name: Install dependencies
         working-directory: ./fundflow-app
         run: npm ci
-        # npm ci is faster than npm install in CI — uses package-lock.json exactly
 
       - name: Build production bundle
         working-directory: ./fundflow-app
         run: npm run build
 
-      - name: Upload build artifact
+      - name: Upload dist
         uses: actions/upload-artifact@v4
         with:
           name: fundflow-app-dist
           path: fundflow-app/dist/
           retention-days: 7
 
-  # ─────────────────────────────────────────────
-  # JOB 3 — Python seeder: Validate
-  # Checks that CSV files exist, are readable,
-  # and contain the expected columns.
-  # ─────────────────────────────────────────────
-  core-validate:
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 3 — Python seeder: validate
+  #
+  # Installs pymongo and validates that both CSV files exist,
+  # are readable, and contain the required columns.
+  # ───────────────────────────────────────────────────────────────────────────
+  core-ci:
     name: Python Seeder — Validate
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up Python 3.13
@@ -108,158 +107,31 @@ jobs:
         working-directory: ./fundflow-core
         run: pip install -r requirements.txt
 
-      - name: Validate CSV files
+      - name: Validate fund CSVs
         run: |
-          python -c "import csv; rows = list(csv.DictReader(open('fundflow-core/data/funds.csv'))); assert len(rows) > 0; assert 'isin' in rows[0]; print(f'funds.csv OK: {len(rows)} funds')"
-          python -c "import csv; rows = list(csv.DictReader(open('fundflow-core/data/funds_supplemental.csv'))); assert len(rows) > 0; assert 'isin' in rows[0]; print(f'funds_supplemental.csv OK: {len(rows)} funds')"
+          python -c "
+          import csv
+          files = ['fundflow-core/data/funds.csv', 'fundflow-core/data/funds_supplemental.csv']
+          for f in files:
+              rows = list(csv.DictReader(open(f)))
+              assert len(rows) > 0, f'{f} is empty'
+              assert 'isin' in rows[0], f'{f} missing isin column'
+              print(f'{f}: OK ({len(rows)} funds)')
+          "
 
-  # ─────────────────────────────────────────────
-  # JOB 4 — Docker Compose: Validate config
-  # Parses docker-compose.yml and validates syntax
-  # without starting containers.
-  # Runs after all three CI jobs pass — acts as
-  # the gate before deployment.
-  # ─────────────────────────────────────────────
-  docker-validate:
-    name: Docker Compose — Validate config
+  # ───────────────────────────────────────────────────────────────────────────
+  # JOB 4 — Docker Compose: validate config
+  #
+  # Parses docker-compose.yml and validates syntax without starting containers.
+  # Acts as the final gate — only runs after all three service jobs pass.
+  # ───────────────────────────────────────────────────────────────────────────
+  compose-ci:
+    name: Docker Compose — Validate
     runs-on: ubuntu-latest
-    needs: [bff-build, app-build, core-validate]
+    needs: [ bff-ci, app-ci, core-ci ]
     steps:
-      - name: Checkout code
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml
-        run: docker compose config
-
-  # ─────────────────────────────────────────────
-  # JOB 5 — Deploy to Google Cloud Run
-  #
-  # Only runs when:
-  #   - push to main branch (not develop, not PRs)
-  #   - all CI jobs pass (needs: docker-validate)
-  #
-  # Deployment order matters:
-  #   1. Build + push BFF image
-  #   2. Deploy BFF to Cloud Run
-  #   3. Get BFF public URL (needed by React build)
-  #   4. Build + push React image with BFF URL injected
-  #   5. Deploy React app to Cloud Run
-  #
-  # Why this order: The React app calls the BFF directly
-  # from the browser. The BFF URL must be baked into the
-  # Vite build at compile time via VITE_API_BASE_URL.
-  # We can only get that URL after the BFF is deployed.
-  # ─────────────────────────────────────────────
-  deploy:
-    name: Deploy to Cloud Run
-    runs-on: ubuntu-latest
-    needs: [docker-validate]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      # Authenticate with Google Cloud using the service account key
-      # stored as a GitHub secret. Never hardcode credentials.
-      - name: Authenticate to Google Cloud
-        uses: google-github-actions/auth@v2
-        with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
-
-      - name: Set up Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-
-      # Allow Docker to push images to Google Artifact Registry
-      - name: Configure Docker for Artifact Registry
-        run: gcloud auth configure-docker ${{ env.REGISTRY }} --quiet
-
-      # ── STEP 1: Build and push BFF image ──────────────────────────
-      # Tag with both the commit SHA (immutable, for traceability)
-      # and "latest" (mutable, for convenience).
-      - name: Build BFF Docker image
-        run: |
-          docker build \
-            -t ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-bff:${{ github.sha }} \
-            -t ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-bff:latest \
-            ./fundflow-bff
-
-      - name: Push BFF image to Artifact Registry
-        run: |
-          docker push ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-bff:${{ github.sha }}
-          docker push ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-bff:latest
-
-      # ── STEP 2: Deploy BFF to Cloud Run ───────────────────────────
-      # min-instances=0 means the service scales to zero when idle
-      # (free tier). In production you'd set min-instances=1 to avoid
-      # cold starts at the cost of always-on billing.
-      - name: Deploy BFF to Cloud Run
-        run: |
-          gcloud run deploy fundflow-bff \
-            --image=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-bff:${{ github.sha }} \
-            --region=${{ env.GCP_REGION }} \
-            --platform=managed \
-            --allow-unauthenticated \
-            --set-env-vars="GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" \
-            --set-env-vars="SPRING_DATA_MONGODB_URI=${{ secrets.MONGODB_URI }}" \
-            --memory=512Mi \
-            --cpu=1 \
-            --min-instances=0 \
-            --max-instances=2 \
-            --port=8080
-
-      # ── STEP 3: Get BFF URL ────────────────────────────────────────
-      # Capture the Cloud Run URL assigned to the BFF service.
-      # This URL is stable and never changes for the same service name.
-      # We pass it to the React build in the next step.
-      - name: Get BFF Cloud Run URL
-        id: bff-url
-        run: |
-          BFF_URL=$(gcloud run services describe fundflow-bff \
-            --region=${{ env.GCP_REGION }} \
-            --format='value(status.url)')
-          echo "url=$BFF_URL" >> $GITHUB_OUTPUT
-          echo "BFF deployed at: $BFF_URL"
-
-      # ── STEP 4: Build and push React image ────────────────────────
-      # VITE_API_BASE_URL is injected at BUILD TIME via --build-arg.
-      # Vite bakes it into the JavaScript bundle during compilation.
-      # This means the React app in the browser knows the BFF URL
-      # without needing a runtime environment variable.
-      - name: Build React app Docker image
-        run: |
-          docker build \
-            --build-arg VITE_API_BASE_URL=${{ steps.bff-url.outputs.url }} \
-            -t ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-app:${{ github.sha }} \
-            -t ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-app:latest \
-            ./fundflow-app
-
-      - name: Push React app image to Artifact Registry
-        run: |
-          docker push ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-app:${{ github.sha }}
-          docker push ${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-app:latest
-
-      # ── STEP 5: Deploy React app to Cloud Run ─────────────────────
-      - name: Deploy React app to Cloud Run
-        run: |
-          gcloud run deploy fundflow-app \
-            --image=${{ env.REGISTRY }}/${{ env.GCP_PROJECT_ID }}/fundflow/fundflow-app:${{ github.sha }} \
-            --region=${{ env.GCP_REGION }} \
-            --platform=managed \
-            --allow-unauthenticated \
-            --memory=256Mi \
-            --cpu=1 \
-            --min-instances=0 \
-            --max-instances=2 \
-            --port=8080
-
-      # ── Print final URLs ───────────────────────────────────────────
-      - name: Print deployment URLs
-        run: |
-          APP_URL=$(gcloud run services describe fundflow-app \
-            --region=${{ env.GCP_REGION }} \
-            --format='value(status.url)')
-          echo "================================"
-          echo "BFF URL : ${{ steps.bff-url.outputs.url }}"
-          echo "App URL : $APP_URL"
-          echo "================================"
+        run: docker compose config --quiet
