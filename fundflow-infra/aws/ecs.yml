@@ -1,0 +1,266 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: FundFlow ECS — ALB + ECS Fargate cluster and services
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fundflow
+
+Resources:
+
+  # ─────────────────────────────────────────────
+  # ECS CLUSTER
+  # Logical grouping for all Fargate tasks.
+  # With Fargate there are no EC2 instances to
+  # manage — AWS provisions compute on demand.
+  # ─────────────────────────────────────────────
+  EcsCluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: !Sub ${ProjectName}-cluster
+      CapacityProviders:
+        - FARGATE
+        - FARGATE_SPOT      # cheaper for non-critical workloads
+      DefaultCapacityProviderStrategy:
+        - CapacityProvider: FARGATE
+          Weight: 1
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ─────────────────────────────────────────────
+  # APPLICATION LOAD BALANCER
+  # Sits in public subnets, accepts HTTPS from internet.
+  # Routes /api/* to BFF, everything else to React app.
+  # This is the only resource with a public IP.
+  # ─────────────────────────────────────────────
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub ${ProjectName}-alb
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !ImportValue fundflow-alb-sg-id
+      Subnets:
+        - !ImportValue fundflow-public-subnet-1
+        - !ImportValue fundflow-public-subnet-2
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ─────────────────────────────────────────────
+  # TARGET GROUPS
+  # ALB routes traffic to target groups.
+  # Each target group points to one ECS service.
+  # Health checks verify the service is responding.
+  # ─────────────────────────────────────────────
+  BffTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-bff-tg
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip      # required for Fargate — tasks get IPs, not instance IDs
+      VpcId: !ImportValue fundflow-vpc-id
+      HealthCheckPath: /actuator/health/liveness
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AppTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Name: !Sub ${ProjectName}-app-tg
+      Port: 8080
+      Protocol: HTTP
+      TargetType: ip
+      VpcId: !ImportValue fundflow-vpc-id
+      HealthCheckPath: /
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 5
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 3
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ─────────────────────────────────────────────
+  # ALB LISTENER
+  # Listens on port 80 (HTTP) and routes traffic.
+  # /api/* → BFF target group
+  # /* → React app target group
+  # ─────────────────────────────────────────────
+  AlbListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref AppTargetGroup
+
+  # Route /api/* to BFF
+  BffListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref AlbListener
+      Priority: 1
+      Conditions:
+        - Field: path-pattern
+          Values:
+            - /api/*
+            - /actuator/*
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref BffTargetGroup
+
+  # ─────────────────────────────────────────────
+  # ECS TASK DEFINITIONS
+  # Describes how to run each container:
+  # - Which Docker image to use
+  # - CPU and memory limits
+  # - Environment variables and secrets
+  # - Log configuration
+  # ─────────────────────────────────────────────
+  BffTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${ProjectName}-bff
+      NetworkMode: awsvpc     # required for Fargate
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'              # 0.25 vCPU — enough for Spring Boot
+      Memory: '512'           # 512MB — minimum for JVM
+      ExecutionRoleArn: !ImportValue fundflow-execution-role-arn
+      TaskRoleArn: !ImportValue fundflow-task-role-arn
+      ContainerDefinitions:
+        - Name: fundflow-bff
+          Image: !Sub 337944160032.dkr.ecr.eu-west-1.amazonaws.com/fundflow/fundflow-bff:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          Secrets:
+            # Secrets are fetched from Secrets Manager at container startup
+            # Never appear in task definition in plain text
+            - Name: SPRING_DATA_MONGODB_URI
+              ValueFrom: arn:aws:secretsmanager:eu-west-1:337944160032:secret:fundflow/mongodb-uri-wRJJBZ
+            - Name: GEMINI_API_KEY
+              ValueFrom: arn:aws:secretsmanager:eu-west-1:337944160032:secret:fundflow/gemini-api-key-v6lwN7
+          Environment:
+            - Name: SPRING_APPLICATION_NAME
+              Value: fundflow-bff
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${ProjectName}-bff
+              awslogs-region: eu-west-1
+              awslogs-stream-prefix: ecs
+
+  AppTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      Family: !Sub ${ProjectName}-app
+      NetworkMode: awsvpc
+      RequiresCompatibilities:
+        - FARGATE
+      Cpu: '256'
+      Memory: '512'
+      ExecutionRoleArn: !ImportValue fundflow-execution-role-arn
+      TaskRoleArn: !ImportValue fundflow-task-role-arn
+      ContainerDefinitions:
+        - Name: fundflow-app
+          Image: !Sub 337944160032.dkr.ecr.eu-west-1.amazonaws.com/fundflow/fundflow-app:latest
+          Essential: true
+          PortMappings:
+            - ContainerPort: 8080
+              Protocol: tcp
+          LogConfiguration:
+            LogDriver: awslogs
+            Options:
+              awslogs-group: !Sub /ecs/${ProjectName}-app
+              awslogs-region: eu-west-1
+              awslogs-stream-prefix: ecs
+
+  # ─────────────────────────────────────────────
+  # ECS SERVICES
+  # Keeps the desired number of tasks running.
+  # If a task crashes, ECS replaces it automatically.
+  # Connected to ALB target groups for traffic routing.
+  # ─────────────────────────────────────────────
+  BffService:
+    Type: AWS::ECS::Service
+    DependsOn: BffListenerRule
+    Properties:
+      ServiceName: !Sub ${ProjectName}-bff
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref BffTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !ImportValue fundflow-ecs-sg-id
+          Subnets:
+            - !ImportValue fundflow-private-subnet-1
+            - !ImportValue fundflow-private-subnet-2
+          AssignPublicIp: DISABLED    # private subnet — no public IP
+      LoadBalancers:
+        - ContainerName: fundflow-bff
+          ContainerPort: 8080
+          TargetGroupArn: !Ref BffTargetGroup
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  AppService:
+    Type: AWS::ECS::Service
+    DependsOn: AlbListener
+    Properties:
+      ServiceName: !Sub ${ProjectName}-app
+      Cluster: !Ref EcsCluster
+      TaskDefinition: !Ref AppTaskDefinition
+      DesiredCount: 1
+      LaunchType: FARGATE
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          SecurityGroups:
+            - !ImportValue fundflow-ecs-sg-id
+          Subnets:
+            - !ImportValue fundflow-private-subnet-1
+            - !ImportValue fundflow-private-subnet-2
+          AssignPublicIp: DISABLED
+      LoadBalancers:
+        - ContainerName: fundflow-app
+          ContainerPort: 8080
+          TargetGroupArn: !Ref AppTargetGroup
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  LoadBalancerDns:
+    Value: !GetAtt LoadBalancer.DNSName
+    Export:
+      Name: !Sub ${ProjectName}-alb-dns
+
+  EcsClusterName:
+    Value: !Ref EcsCluster
+    Export:
+      Name: !Sub ${ProjectName}-cluster-name
+
+  BffServiceName:
+    Value: !GetAtt BffService.Name
+    Export:
+      Name: !Sub ${ProjectName}-bff-service-name
+
+  AppServiceName:
+    Value: !GetAtt AppService.Name
+    Export:
+      Name: !Sub ${ProjectName}-app-service-name
