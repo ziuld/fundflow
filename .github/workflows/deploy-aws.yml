@@ -1,25 +1,26 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # FundFlow — Deploy to AWS ECS Fargate
 #
-# STATUS: IN PROGRESS — ECS stack not yet created
+# Triggers on every push to main after CI passes.
+# Uses OIDC authentication — no static AWS keys stored anywhere.
 #
-# What this will do:
-#   1. Authenticate to AWS via OIDC (no static keys)
-#   2. Build BFF and React Docker images
-#   3. Push to Amazon ECR
-#   4. Register new ECS task definitions
-#   5. Update ECS services to deploy new revisions
+# Deployment order:
+#   1. Authenticate to AWS via OIDC (15min token, expires automatically)
+#   2. Build BFF image → push to ECR → force ECS service update
+#   3. Build React image with ALB URL baked in → push to ECR → force ECS update
 #
 # Required GitHub secrets:
-#   - AWS_ROLE_ARN      → IAM role ARN for OIDC authentication
-#   - AWS_REGION        → eu-west-1
-#   - BFF_ECR_REPO      → ECR repository URI for BFF
-#   - APP_ECR_REPO      → ECR repository URI for React app
-#   - BFF_URL           → ALB DNS name for VITE_API_BASE_URL injection
+#   AWS_ROLE_ARN     → IAM role ARN (fundflow-github-actions-role)
+#   AWS_ALB_URL      → ALB DNS name for VITE_API_BASE_URL injection
+#   AWS_BFF_ECR_REPO → ECR URI for BFF image
+#   AWS_APP_ECR_REPO → ECR URI for React app image
 #
 # Architecture:
-#   Internet → WAF → ALB (public subnet) → ECS Fargate (private subnet)
-#   Secrets injected at runtime from AWS Secrets Manager via IAM role
+#   GitHub Actions → ECR → ECS Fargate (private subnet)
+#                              ↑
+#                          ALB (public subnet)
+#                              ↑
+#                          Internet
 # ─────────────────────────────────────────────────────────────────────────────
 name: Deploy — AWS ECS Fargate
 
@@ -29,22 +30,25 @@ on:
 
 env:
   AWS_REGION: eu-west-1
+  ECS_CLUSTER: fundflow-cluster
 
 jobs:
   deploy:
     name: Deploy to ECS Fargate
     runs-on: ubuntu-latest
-    if: false  # DISABLED — will be enabled once ECS stack is ready
     permissions:
-      id-token: write   # required for OIDC authentication
+      id-token: write   # required for OIDC — allows GitHub to request AWS token
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # OIDC authentication — no static AWS keys stored anywhere
-      # GitHub Actions receives a short-lived token (15min) from AWS
+      # ── Authentication ─────────────────────────────────────────────────────
+      # OIDC is more secure than static keys:
+      # - No long-lived credentials stored in GitHub
+      # - Token expires after 15 minutes
+      # - Only this repo can assume the role (enforced by IAM condition)
       - name: Configure AWS credentials via OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -55,34 +59,81 @@ jobs:
         id: ecr-login
         uses: aws-actions/amazon-ecr-login@v2
 
-      # ── BFF ───────────────────────────────────────────────────────────────
-      - name: Build and push BFF image
+      # ── BFF: Build and deploy ──────────────────────────────────────────────
+      # Tagged with commit SHA for traceability + latest for convenience.
+      # ECS will pull :latest when force-new-deployment is triggered.
+      - name: Build BFF image
         run: |
           docker build \
-            -t ${{ secrets.BFF_ECR_REPO }}:${{ github.sha }} \
-            -t ${{ secrets.BFF_ECR_REPO }}:latest \
+            -t ${{ secrets.AWS_BFF_ECR_REPO }}:${{ github.sha }} \
+            -t ${{ secrets.AWS_BFF_ECR_REPO }}:latest \
             ./fundflow-bff
-          docker push ${{ secrets.BFF_ECR_REPO }}:${{ github.sha }}
-          docker push ${{ secrets.BFF_ECR_REPO }}:latest
 
-      # ── React app ─────────────────────────────────────────────────────────
-      - name: Build and push React image
+      - name: Push BFF image to ECR
+        run: |
+          docker push ${{ secrets.AWS_BFF_ECR_REPO }}:${{ github.sha }}
+          docker push ${{ secrets.AWS_BFF_ECR_REPO }}:latest
+
+      - name: Deploy BFF to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service fundflow-bff \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "BFF deployment triggered"
+
+      # ── React app: Build and deploy ────────────────────────────────────────
+      # VITE_API_BASE_URL is baked into the JS bundle at compile time.
+      # This is why we use --build-arg and not a runtime env var.
+      # The ALB URL never changes so this value is stable.
+      - name: Build React image with ALB URL
         run: |
           docker build \
-            --build-arg VITE_API_BASE_URL=${{ secrets.BFF_URL }} \
-            -t ${{ secrets.APP_ECR_REPO }}:${{ github.sha }} \
-            -t ${{ secrets.APP_ECR_REPO }}:latest \
+            --build-arg VITE_API_BASE_URL=${{ secrets.AWS_ALB_URL }} \
+            -t ${{ secrets.AWS_APP_ECR_REPO }}:${{ github.sha }} \
+            -t ${{ secrets.AWS_APP_ECR_REPO }}:latest \
             ./fundflow-app
-          docker push ${{ secrets.APP_ECR_REPO }}:${{ github.sha }}
-          docker push ${{ secrets.APP_ECR_REPO }}:latest
 
-      # ── ECS deploy ────────────────────────────────────────────────────────
-      # TODO: add task definition update + ecs service update steps
-      # These will be added once the ECS CloudFormation stack is created
+      - name: Push React image to ECR
+        run: |
+          docker push ${{ secrets.AWS_APP_ECR_REPO }}:${{ github.sha }}
+          docker push ${{ secrets.AWS_APP_ECR_REPO }}:latest
 
-      - name: Print deployment info
+      - name: Deploy React app to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service fundflow-app \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "React app deployment triggered"
+
+      # ── Wait for deployments to stabilize ─────────────────────────────────
+      # Waits until both services report all tasks as running and healthy.
+      # Fails the pipeline if services don't stabilize within timeout.
+      - name: Wait for BFF service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services fundflow-bff \
+            --region ${{ env.AWS_REGION }}
+          echo "BFF service stable"
+
+      - name: Wait for React service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services fundflow-app \
+            --region ${{ env.AWS_REGION }}
+          echo "React service stable"
+
+      # ── Print deployment summary ───────────────────────────────────────────
+      - name: Deployment summary
         run: |
           echo "================================"
-          echo "BFF image : ${{ secrets.BFF_ECR_REPO }}:${{ github.sha }}"
-          echo "App image : ${{ secrets.APP_ECR_REPO }}:${{ github.sha }}"
+          echo "Deployment complete"
+          echo "Commit : ${{ github.sha }}"
+          echo "App URL: ${{ secrets.AWS_ALB_URL }}"
+          echo "BFF URL: ${{ secrets.AWS_ALB_URL }}/api/v1/funds"
           echo "================================"
