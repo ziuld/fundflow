@@ -7,8 +7,7 @@ spring:
       # When running inside Docker, this comes from the environment variable
       # set in docker-compose.yml. When running locally outside Docker,
       # it falls back to localhost.
-      uri: ${SPRING_DATA_MONGODB_URI:mongodb://fundflow:fundflow123@localhost:27017/fundflowdb?authSource=admin}
-
+      uri: ${SPRING_DATA_MONGODB_URI}
 server:
   port: 8080
 
@@ -17,11 +16,16 @@ server:
 management:
   endpoints:
     web:
-      exposure:
+      exposure: 
         include: health,info
   endpoint:
     health:
       show-details: always
+      probes:
+        enabled: true
+  health:
+    mongo:
+      enabled: false
 
 # Gemini API key — injected from environment, never hardcoded
 gemini:
