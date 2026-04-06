@@ -134,4 +134,6 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate docker-compose.yml
-        run: docker compose config --quiet
+        run: |
+          docker compose version
+          docker compose config
