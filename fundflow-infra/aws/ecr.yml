@@ -1,0 +1,99 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: FundFlow ECR — private Docker image repositories
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fundflow
+
+Resources:
+
+  # ─────────────────────────────────────────────
+  # ECR REPOSITORY — BFF
+  # Stores Spring Boot Docker images.
+  # Images tagged with commit SHA for traceability
+  # and "latest" for convenience.
+  # Lifecycle policy keeps only the last 10 images
+  # to minimize storage costs.
+  # ─────────────────────────────────────────────
+  BffRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${ProjectName}/fundflow-bff
+      ImageScanningConfiguration:
+        ScanOnPush: true    # scans for CVEs on every push
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+  # ─────────────────────────────────────────────
+  # ECR REPOSITORY — React App
+  # Stores nginx + React static files Docker images.
+  # Same lifecycle policy as BFF.
+  # ─────────────────────────────────────────────
+  AppRepository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: !Sub ${ProjectName}/fundflow-app
+      ImageScanningConfiguration:
+        ScanOnPush: true
+      LifecyclePolicy:
+        LifecyclePolicyText: |
+          {
+            "rules": [
+              {
+                "rulePriority": 1,
+                "description": "Keep only last 10 images",
+                "selection": {
+                  "tagStatus": "any",
+                  "countType": "imageCountMoreThan",
+                  "countNumber": 10
+                },
+                "action": {
+                  "type": "expire"
+                }
+              }
+            ]
+          }
+      Tags:
+        - Key: Project
+          Value: !Ref ProjectName
+
+Outputs:
+  BffRepositoryUri:
+    Value: !GetAtt BffRepository.RepositoryUri
+    Export:
+      Name: !Sub ${ProjectName}-bff-repo-uri
+
+  AppRepositoryUri:
+    Value: !GetAtt AppRepository.RepositoryUri
+    Export:
+      Name: !Sub ${ProjectName}-app-repo-uri
+
+  BffRepositoryArn:
+    Value: !GetAtt BffRepository.Arn
+    Export:
+      Name: !Sub ${ProjectName}-bff-repo-arn
+
+  AppRepositoryArn:
+    Value: !GetAtt AppRepository.Arn
+    Export:
+      Name: !Sub ${ProjectName}-app-repo-arn

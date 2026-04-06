@@ -1,0 +1,261 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: FundFlow Security - IAM roles, security groups, Secrets Manager
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: fundflow
+
+  MongoDbUri:
+    Type: String
+    NoEcho: true
+    Description: MongoDB Atlas connection string
+
+  GeminiApiKey:
+    Type: String
+    NoEcho: true
+    Description: Gemini API key
+
+Resources:
+
+  # ─────────────────────────────────────────────
+  # SECURITY GROUPS
+  # Think of these as firewalls per service.
+  # Rule: each service only accepts traffic from
+  # the service directly above it in the chain.
+  # Internet → ALB → ECS (never Internet → ECS)
+  # ─────────────────────────────────────────────
+
+  # ALB Security Group
+  # Accepts HTTPS (443) from anywhere on the internet.
+  # Accepts HTTP (80) only to redirect to HTTPS.
+  AlbSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ALB - accepts HTTPS from internet
+      VpcId: !ImportValue fundflow-vpc-id
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+          Description: HTTPS from internet
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+          Description: HTTP from internet (redirect to HTTPS)
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: All outbound allowed
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-alb-sg
+
+  # ECS Security Group
+  # Only accepts traffic from the ALB security group.
+  # The internet cannot reach ECS directly - ever.
+  # This is the core of the private subnet pattern.
+  EcsSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: ECS - accepts traffic from ALB only
+      VpcId: !ImportValue fundflow-vpc-id
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 8080
+          ToPort: 8080
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          Description: BFF from ALB only
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourceSecurityGroupId: !Ref AlbSecurityGroup
+          Description: React app from ALB only
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+          Description: Outbound to NAT (Atlas, Gemini, ECR)
+      Tags:
+        - Key: Name
+          Value: !Sub ${ProjectName}-ecs-sg
+
+  # ─────────────────────────────────────────────
+  # SECRETS MANAGER
+  # Secrets are stored encrypted at rest.
+  # ECS containers fetch them at startup via IAM role.
+  # No secrets in env vars, no secrets in Docker images.
+  # ─────────────────────────────────────────────
+  MongoDbSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/mongodb-uri
+      Description: MongoDB Atlas connection string
+      SecretString: !Ref MongoDbUri
+
+  GeminiSecret:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub ${ProjectName}/gemini-api-key
+      Description: Gemini API key
+      SecretString: !Ref GeminiApiKey
+
+  # ─────────────────────────────────────────────
+  # IAM - ECS TASK EXECUTION ROLE
+  # This role is used by ECS to:
+  # - Pull Docker images from ECR
+  # - Write logs to CloudWatch
+  # - Read secrets from Secrets Manager
+  # This is NOT the application role - it's the
+  # infrastructure role for ECS itself.
+  # ─────────────────────────────────────────────
+  EcsTaskExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-ecs-execution-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Policies:
+        - PolicyName: SecretsManagerAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref MongoDbSecret
+                  - !Ref GeminiSecret
+
+  # ─────────────────────────────────────────────
+  # IAM - ECS TASK ROLE
+  # This role is used by the APPLICATION code
+  # running inside the container.
+  # Currently empty - add permissions here if
+  # your app needs to call other AWS services.
+  # ─────────────────────────────────────────────
+  EcsTaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-ecs-task-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+            Action: sts:AssumeRole
+
+  # ─────────────────────────────────────────────
+  # IAM - GITHUB ACTIONS ROLE (OIDC)
+  # GitHub Actions assumes this role via OIDC
+  # instead of using static access keys.
+  # Much more secure - credentials expire in 15min.
+  # Only the fundflow repo can assume this role.
+  # ─────────────────────────────────────────────
+  GithubActionsRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub ${ProjectName}-github-actions-role
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: repo:ziuld/fundflow:*
+      Policies:
+        - PolicyName: EcrAndEcsDeployment
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - ecr:GetAuthorizationToken
+                  - ecr:BatchCheckLayerAvailability
+                  - ecr:GetDownloadUrlForLayer
+                  - ecr:BatchGetImage
+                  - ecr:PutImage
+                  - ecr:InitiateLayerUpload
+                  - ecr:UploadLayerPart
+                  - ecr:CompleteLayerUpload
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - ecs:UpdateService
+                  - ecs:DescribeServices
+                  - ecs:RegisterTaskDefinition
+                  - ecs:DescribeTaskDefinition
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - iam:PassRole
+                Resource:
+                  - !GetAtt EcsTaskExecutionRole.Arn
+                  - !GetAtt EcsTaskRole.Arn
+
+  # ─────────────────────────────────────────────
+  # CLOUDWATCH LOG GROUPS
+  # ECS containers write logs here automatically.
+  # Retention set to 7 days to minimize cost.
+  # ─────────────────────────────────────────────
+  BffLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${ProjectName}-bff
+      RetentionInDays: 7
+
+  AppLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /ecs/${ProjectName}-app
+      RetentionInDays: 7
+
+Outputs:
+  AlbSecurityGroupId:
+    Value: !Ref AlbSecurityGroup
+    Export:
+      Name: !Sub ${ProjectName}-alb-sg-id
+
+  EcsSecurityGroupId:
+    Value: !Ref EcsSecurityGroup
+    Export:
+      Name: !Sub ${ProjectName}-ecs-sg-id
+
+  EcsTaskExecutionRoleArn:
+    Value: !GetAtt EcsTaskExecutionRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-execution-role-arn
+
+  EcsTaskRoleArn:
+    Value: !GetAtt EcsTaskRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-task-role-arn
+
+  GithubActionsRoleArn:
+    Value: !GetAtt GithubActionsRole.Arn
+    Export:
+      Name: !Sub ${ProjectName}-github-role-arn
+
+  MongoDbSecretArn:
+    Value: !Ref MongoDbSecret
+    Export:
+      Name: !Sub ${ProjectName}-mongodb-secret-arn
+
+  GeminiSecretArn:
+    Value: !Ref GeminiSecret
+    Export:
+      Name: !Sub ${ProjectName}-gemini-secret-arn

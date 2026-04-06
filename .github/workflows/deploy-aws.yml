@@ -1,0 +1,139 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FundFlow — Deploy to AWS ECS Fargate
+#
+# Triggers on every push to main after CI passes.
+# Uses OIDC authentication — no static AWS keys stored anywhere.
+#
+# Deployment order:
+#   1. Authenticate to AWS via OIDC (15min token, expires automatically)
+#   2. Build BFF image → push to ECR → force ECS service update
+#   3. Build React image with ALB URL baked in → push to ECR → force ECS update
+#
+# Required GitHub secrets:
+#   AWS_ROLE_ARN     → IAM role ARN (fundflow-github-actions-role)
+#   AWS_ALB_URL      → ALB DNS name for VITE_API_BASE_URL injection
+#   AWS_BFF_ECR_REPO → ECR URI for BFF image
+#   AWS_APP_ECR_REPO → ECR URI for React app image
+#
+# Architecture:
+#   GitHub Actions → ECR → ECS Fargate (private subnet)
+#                              ↑
+#                          ALB (public subnet)
+#                              ↑
+#                          Internet
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy — AWS ECS Fargate
+
+on:
+  push:
+    branches: [ main ]
+
+env:
+  AWS_REGION: eu-west-1
+  ECS_CLUSTER: fundflow-cluster
+
+jobs:
+  deploy:
+    name: Deploy to ECS Fargate
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write   # required for OIDC — allows GitHub to request AWS token
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # ── Authentication ─────────────────────────────────────────────────────
+      # OIDC is more secure than static keys:
+      # - No long-lived credentials stored in GitHub
+      # - Token expires after 15 minutes
+      # - Only this repo can assume the role (enforced by IAM condition)
+      - name: Configure AWS credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: ecr-login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      # ── BFF: Build and deploy ──────────────────────────────────────────────
+      # Tagged with commit SHA for traceability + latest for convenience.
+      # ECS will pull :latest when force-new-deployment is triggered.
+      - name: Build BFF image
+        run: |
+          docker build \
+            -t ${{ secrets.AWS_BFF_ECR_REPO }}:${{ github.sha }} \
+            -t ${{ secrets.AWS_BFF_ECR_REPO }}:latest \
+            ./fundflow-bff
+
+      - name: Push BFF image to ECR
+        run: |
+          docker push ${{ secrets.AWS_BFF_ECR_REPO }}:${{ github.sha }}
+          docker push ${{ secrets.AWS_BFF_ECR_REPO }}:latest
+
+      - name: Deploy BFF to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service fundflow-bff \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "BFF deployment triggered"
+
+      # ── React app: Build and deploy ────────────────────────────────────────
+      # VITE_API_BASE_URL is baked into the JS bundle at compile time.
+      # This is why we use --build-arg and not a runtime env var.
+      # The ALB URL never changes so this value is stable.
+      - name: Build React image with ALB URL
+        run: |
+          docker build \
+            --build-arg VITE_API_BASE_URL=${{ secrets.AWS_ALB_URL }} \
+            -t ${{ secrets.AWS_APP_ECR_REPO }}:${{ github.sha }} \
+            -t ${{ secrets.AWS_APP_ECR_REPO }}:latest \
+            ./fundflow-app
+
+      - name: Push React image to ECR
+        run: |
+          docker push ${{ secrets.AWS_APP_ECR_REPO }}:${{ github.sha }}
+          docker push ${{ secrets.AWS_APP_ECR_REPO }}:latest
+
+      - name: Deploy React app to ECS
+        run: |
+          aws ecs update-service \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --service fundflow-app \
+            --force-new-deployment \
+            --region ${{ env.AWS_REGION }}
+          echo "React app deployment triggered"
+
+      # ── Wait for deployments to stabilize ─────────────────────────────────
+      # Waits until both services report all tasks as running and healthy.
+      # Fails the pipeline if services don't stabilize within timeout.
+      - name: Wait for BFF service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services fundflow-bff \
+            --region ${{ env.AWS_REGION }}
+          echo "BFF service stable"
+
+      - name: Wait for React service to stabilize
+        run: |
+          aws ecs wait services-stable \
+            --cluster ${{ env.ECS_CLUSTER }} \
+            --services fundflow-app \
+            --region ${{ env.AWS_REGION }}
+          echo "React service stable"
+
+      # ── Print deployment summary ───────────────────────────────────────────
+      - name: Deployment summary
+        run: |
+          echo "================================"
+          echo "Deployment complete"
+          echo "Commit : ${{ github.sha }}"
+          echo "App URL: ${{ secrets.AWS_ALB_URL }}"
+          echo "BFF URL: ${{ secrets.AWS_ALB_URL }}/api/v1/funds"
+          echo "================================"
