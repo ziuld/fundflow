@@ -360,11 +360,3 @@ git branch -d feature/9999-practica-formacion
 git push origin --delete feature/9999-practica-formacion
 ```
 
-Material de apoyo:
-
-- `docs/GUIA_FORMACION_GIT_Y_OPERACION_REPO.md`
-- `docs/CONTRIBUTING.md`
-- `docs/GOBIERNO_REPOSITORIO.md`
-- `docs/RUNBOOK_DESPLIEGUE.md`
-- `docs/PROCEDIMIENTO_ROLLBACK.md`
-

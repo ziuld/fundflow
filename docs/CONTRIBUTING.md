@@ -1,4 +1,4 @@
-# Guia de contribucion – Repositorio legalitas-crm
+# Guia de contribucion
 
 Objetivo: definir como contribuir al repositorio del CRM. Todo cambio que deba integrarse en `develop` sigue flujo de `Pull Request` y revision.
 
@@ -31,20 +31,3 @@ Objetivo: definir como contribuir al repositorio del CRM. Todo cambio que deba i
 - Tags de release en `main`: `vX.Y.Z`.
 - No push directo a `main` ni a `develop`.
 
-## 4. Revision de codigo
-
-- El fichero `/.github/CODEOWNERS` asigna revisores por ruta.
-- Cambios en rutas criticas requieren revision de Tech Lead correspondiente.
-- No se hace merge con conflictos sin resolver.
-
-## 5. Restricciones operativas
-
-- No planificar despliegues a `PRO` desde el dia 25 del mes.
-- Los despliegues a produccion se ejecutan por pipeline en ventana acordada.
-
-## 6. Referencias
-
-- [README raiz](../README.md)
-- [GOBIERNO_REPOSITORIO.md](GOBIERNO_REPOSITORIO.md)
-- [RUNBOOK_DESPLIEGUE.md](RUNBOOK_DESPLIEGUE.md)
-- [PROCEDIMIENTO_ROLLBACK.md](PROCEDIMIENTO_ROLLBACK.md)
