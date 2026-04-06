@@ -26,7 +26,7 @@
 | **Lectura (stakeholders, QA)** | Read | Clonar, ver código, ver PR. |
 | **Pipelines / bots** | Read + write (token o App) | Solo para CI/CD (checkout, publicar artefactos). |
 
-En **GitHub Org** usar **Teams** (ej. `legalitas-crm-dev`, `legalitas-crm-tech-leads`) y asignar permisos por equipo.
+En **GitHub Org** usar **Teams** (ej. `team-dev`, `team-tech-leads`) y asignar permisos por equipo.
 
 ### 2.2 Azure Repos
 
@@ -71,7 +71,7 @@ Objetivo: **solo merge desde `release/*` o `hotfix/*`**; código en producción.
 ## 4. CODEOWNERS (revisores por ruta)
 
 - **Ubicación:** `.github/CODEOWNERS` (GitHub) o raíz del repo como `CODEOWNERS` (Azure Repos).
-- **Contenido:** Ver [CODEOWNERS.md](CODEOWNERS.md). Rutas críticas (plugins, webresources, deploy) -> Tech Lead Finanzas/Operaciones; resto -> equipo por defecto.
+- **Contenido:** Rutas críticas -> Tech Lead Finanzas/Operaciones; resto -> equipo por defecto.
 - En GitHub, en la regla de `develop` (y `main`), activar **Require review from Code Owners** para que los CODEOWNERS sean obligatorios en las rutas que toquen.
 
 ---
@@ -82,26 +82,3 @@ Objetivo: **solo merge desde `release/*` o `hotfix/*`**; código en producción.
 - **Merge a main:** Desde `release/X.Y.0` o `hotfix/X.Y.Z`; crear **tag** (ej. `v1.2.0`) en el commit de merge.
 - Tras merge, borrar la rama feature/bug (opcional).
 
----
-
-## 6. Opcionales
-
-- **Environments (GitHub):** dev / pre / prod con approvers en **prod** (y opcionalmente pre) antes de que el CD despliegue.
-- **Plantilla de PR** (`.github/PULL_REQUEST_TEMPLATE.md`) con checklist (tests, impacto BL/IBL).
-- **Secrets:** Solo accesibles por Admins y por el pipeline; usar Environment secrets por entorno.
-- **Concurrencia de despliegue:** mantener `concurrency` activo en workflows CD/Rollback para evitar solapes.
-
----
-
-## 7. Checklist de implantación
-
-- [ ] Permisos definidos por rol (Admin, Write, Read).
-- [ ] Protección de `develop`: PR obligatorio, aprobaciones, status check CI, Code Owners requeridos, sin bypass.
-- [ ] Protección de `main`: PR obligatorio, solo merge desde release/hotfix, sin force push.
-- [ ] CODEOWNERS creado con Tech Lead en rutas críticas (ver [CODEOWNERS.md](CODEOWNERS.md)).
-- [ ] [CONTRIBUTING.md](CONTRIBUTING.md) actualizado y comunicado al equipo.
-- [ ] Checklist de salida revisado (ver [CHECKLIST_GO_LIVE_CI_CD.md](CHECKLIST_GO_LIVE_CI_CD.md)).
-
----
-
-*Última actualización: Febrero 2026*

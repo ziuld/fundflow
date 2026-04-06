@@ -1,7 +1,17 @@
 # FundFlow — Investment Funds Dashboard
 
 A full-stack asset management dashboard with AI-powered fund advisor chat.
-Built as a technical portfolio project demonstrating modern Java backend, React frontend, and AI integration.
+Built as a technical portfolio project covering Java backend, React frontend, Python data pipelines, Docker, and multi-cloud CI/CD.
+
+---
+
+## Live environments
+
+| Environment | App URL | Status |
+|-------------|---------|--------|
+| AWS ECS Fargate | http://fundflow-alb-xxxxx.eu-west-1.elb.amazonaws.com | Active |
+| GCP Cloud Run | https://fundflow-app-xxxxx.europe-west1.run.app | Preserved |
+| Azure Container Apps | — | Planned |
 
 ---
 
@@ -12,21 +22,12 @@ Built as a technical portfolio project demonstrating modern Java backend, React 
 | Frontend | React 18 + Vite + Material UI |
 | Backend | Java 21 + Spring Boot 4.0.5 + REST |
 | AI | Gemini 2.5 Flash API |
-| Database | MongoDB 7.0 |
+| Database | MongoDB Atlas (cloud) / MongoDB 7.0 (local) |
 | Data pipeline | Python 3.13 + pymongo |
-| Infrastructure | Docker Compose |
+| Local infra | Docker Compose |
+| Cloud — AWS | ECS Fargate + ALB + VPC + Secrets Manager + ECR |
+| Cloud — GCP | Cloud Run + Artifact Registry |
 | CI/CD | GitHub Actions |
-
----
-
-## Features
-
-- **Fund dashboard** — real-time table with 30 funds including ETFs, stocks and mutual funds
-- **Risk indicators** — color-coded risk chips and trend icons per fund
-- **Category filter** — filter funds by Equity, Bond, Mixed, Money Market
-- **AI chat advisor** — slide-in drawer per fund powered by Gemini 2.5 Flash
-- **Contextual AI** — Gemini receives fund data as context and answers in the user's language
-- **Full containerization** — entire stack runs with a single `docker compose up --build`
 
 ---
 
@@ -34,69 +35,65 @@ Built as a technical portfolio project demonstrating modern Java backend, React 
 
 ```
 Browser
-  └── React App (port 3000, nginx)
-        └── BFF REST API (port 8080, Spring Boot)
-              ├── MongoDB (port 27017)
+  └── React App (nginx)
+        └── BFF REST API (Spring Boot)
+              ├── MongoDB Atlas
               └── Gemini API (cloud)
 
-Python Seeder (runs once on startup)
+Python Seeder (one-time)
   └── CSV → MongoDB
+```
+
+In production (AWS), the ALB sits in front routing `/api/*` to the BFF and `/*` to the React app. Both containers run in private subnets with no public IPs.
+
+---
+
+## Repository structure
+
+```
+fundflow/
+├── fundflow-app/          # React 18 dashboard
+├── fundflow-bff/          # Java 21 Spring Boot API
+├── fundflow-core/         # Python ETL seeder
+├── fundflow-infra/        # Multi-cloud infrastructure
+│   ├── aws/               # CloudFormation templates
+│   ├── gcp/               # GCP reference docs
+│   └── azure/             # Azure (planned)
+├── docker-compose.yml     # Local development
+├── .github/workflows/     # CI/CD pipelines
+└── .env                   # Local secrets (gitignored)
 ```
 
 ---
 
-## Quick start
+## Quick start — local
 
 **Prerequisites:** Docker Desktop, Git
 
 ```bash
-# Clone the repo
 git clone https://github.com/ziuld/fundflow.git
 cd fundflow
-
-# Create .env file with your Gemini API key
 echo "GEMINI_API_KEY=your_key_here" > .env
-
-# Start everything
 docker compose up --build
-
-# Open the dashboard
 open http://localhost:3000
 ```
 
-That's it. Docker pulls all images, runs the Python seeder to load fund data, starts the BFF and serves the React app.
-
 ---
 
-## Project structure
+## Quick start — AWS deployment
 
-```
-fundflow/
-├── fundflow-bff/          # Java 21 + Spring Boot REST API
-│   ├── src/main/java/
-│   │   └── fundflow_bff/
-│   │       ├── controller/    # REST endpoints
-│   │       ├── service/       # Business logic + Gemini integration
-│   │       ├── repository/    # Spring Data MongoDB
-│   │       ├── model/         # Fund, ChatRequest, ChatResponse
-│   │       └── config/        # MongoDB configuration
-│   └── Dockerfile
-├── fundflow-app/          # React 18 + Material UI dashboard
-│   ├── src/
-│   │   ├── components/    # FundsTable, ChatDrawer
-│   │   └── services/      # fundApi.js, chatApi.js
-│   ├── nginx.conf
-│   └── Dockerfile
-├── fundflow-core/         # Python data pipeline
-│   ├── data/
-│   │   ├── funds.csv
-│   │   └── funds_supplemental.csv
-│   ├── seeder.py
-│   └── Dockerfile
-├── docker-compose.yml
-├── .github/workflows/
-│   └── ci.yml             # Build + test all services on every push
-└── .env                   # Local secrets — not committed
+**Prerequisites:** AWS CLI, Docker, GitHub secrets configured
+
+```bash
+# Deploy infrastructure (one time)
+cd fundflow-infra
+aws cloudformation create-stack --stack-name fundflow-vpc --template-body file://aws/vpc.yml --region eu-west-1
+aws cloudformation create-stack --stack-name fundflow-security --template-body file://aws/security.yml --capabilities CAPABILITY_NAMED_IAM --region eu-west-1
+aws cloudformation create-stack --stack-name fundflow-ecr --template-body file://aws/ecr.yml --region eu-west-1
+aws cloudformation create-stack --stack-name fundflow-ecs --template-body file://aws/ecs.yml --region eu-west-1
+
+# After infrastructure is ready, push to main to trigger CD
+git push origin main
 ```
 
 ---
@@ -104,26 +101,34 @@ fundflow/
 ## API endpoints
 
 ```
-GET    /api/v1/funds                    # All funds
-GET    /api/v1/funds?category=Equity    # Filter by category
-GET    /api/v1/funds?riskLevel=High     # Filter by risk
-GET    /api/v1/funds/{id}              # Single fund
-POST   /api/v1/funds                   # Create fund
-PUT    /api/v1/funds/{id}              # Update fund
-DELETE /api/v1/funds/{id}              # Delete fund
-POST   /api/v1/chat                    # AI chat with fund context
-GET    /actuator/health                # Health check
+GET    /api/v1/funds                    All funds
+GET    /api/v1/funds?category=Equity    Filter by category
+GET    /api/v1/funds?riskLevel=High     Filter by risk
+GET    /api/v1/funds/{id}              Single fund
+POST   /api/v1/funds                   Create fund
+PUT    /api/v1/funds/{id}              Update fund
+DELETE /api/v1/funds/{id}              Delete fund
+POST   /api/v1/chat                    AI chat with fund context
+GET    /actuator/health/liveness       Health check
 ```
 
 ---
 
-## CI/CD
+## CI/CD pipelines
 
-GitHub Actions runs on every push to `main`:
+| Workflow | Trigger | What it does |
+|----------|---------|-------------|
+| `ci.yml` | Every push | Build + test all services |
+| `deploy-aws.yml` | Push to main | Deploy to AWS ECS Fargate |
+| `deploy-gcp.yml` | Disabled | Deploy to GCP Cloud Run |
 
-- **BFF** — Maven build + tests
-- **React** — npm install + production build
-- **Python** — dependency install + CSV validation
-- **Docker** — compose config validation
+---
 
-All jobs run in parallel. Docker validation runs after all three pass.
+## Destroy all AWS resources
+
+```bash
+aws cloudformation delete-stack --stack-name fundflow-ecs --region eu-west-1
+aws cloudformation delete-stack --stack-name fundflow-ecr --region eu-west-1
+aws cloudformation delete-stack --stack-name fundflow-security --region eu-west-1
+aws cloudformation delete-stack --stack-name fundflow-vpc --region eu-west-1
+```
