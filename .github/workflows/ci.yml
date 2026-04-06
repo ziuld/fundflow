@@ -15,7 +15,7 @@ on:
   push:
     branches: [ main, develop ]
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main ]
 
 jobs:
 
@@ -126,7 +126,7 @@ jobs:
   # Acts as the final gate — only runs after all three service jobs pass.
   # ───────────────────────────────────────────────────────────────────────────
   compose-ci:
-    name: Docker Compose — Validate
+    name: Docker Compose — Validate config
     runs-on: ubuntu-latest
     needs: [ bff-ci, app-ci, core-ci ]
     steps:
