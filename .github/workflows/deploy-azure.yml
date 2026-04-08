@@ -20,8 +20,8 @@
 name: Deploy — Azure Container Apps
 
 on:
-  push:
-    branches: [ main ]
+  #push:
+  #  branches: [ main ]
   workflow_dispatch:    # allows manual trigger from GitHub Actions UI
 
 env:
@@ -56,7 +56,7 @@ jobs:
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
       - name: Login to Azure Container Registry
-        run: az acr login --name ${{ secrets.ACR_NAME }}
+        run: az acr login --name ${{ env.ACR_NAME }}
 
       # ── BFF: Build and deploy ──────────────────────────────────────────────
       - name: Build BFF image
