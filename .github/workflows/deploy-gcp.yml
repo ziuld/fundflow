@@ -24,8 +24,8 @@
 name: Deploy — GCP Cloud Run
 
 on:
-  push:
-    branches: [ main ]
+  #push:
+  #  branches: [ main ]
   workflow_dispatch:    # allows manual trigger from GitHub Actions UIa
 
 env:
