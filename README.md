@@ -7,11 +7,12 @@ Built as a technical portfolio project covering Java backend, React frontend, Py
 
 ## Live environments
 
-| Environment | App URL | Status |
-|-------------|---------|--------|
-| AWS ECS Fargate | http://fundflow-alb-xxxxx.eu-west-1.elb.amazonaws.com | Active |
-| GCP Cloud Run | https://fundflow-app-xxxxx.europe-west1.run.app | Preserved |
-| Azure Container Apps | — | Planned |
+| Cloud | App URL | Status |
+|-------|---------|--------|
+| AWS ECS Fargate | http://xxxxxxxxxxx.amazonaws.com | Active |
+| GCP Cloud Run | https://xxxxxxxxxxxxxx.run.app | Preserved |
+| Azure Container Apps | https://xxxxxxxxxxxxx.azurecontainerapps.io | Active |
+| Local | http://localhost:3000 | Docker Compose |
 
 ---
 
@@ -27,24 +28,8 @@ Built as a technical portfolio project covering Java backend, React frontend, Py
 | Local infra | Docker Compose |
 | Cloud — AWS | ECS Fargate + ALB + VPC + Secrets Manager + ECR |
 | Cloud — GCP | Cloud Run + Artifact Registry |
+| Cloud — Azure | Container Apps + ACR + Key Vault |
 | CI/CD | GitHub Actions |
-
----
-
-## Architecture
-
-```
-Browser
-  └── React App (nginx)
-        └── BFF REST API (Spring Boot)
-              ├── MongoDB Atlas
-              └── Gemini API (cloud)
-
-Python Seeder (one-time)
-  └── CSV → MongoDB
-```
-
-In production (AWS), the ALB sits in front routing `/api/*` to the BFF and `/*` to the React app. Both containers run in private subnets with no public IPs.
 
 ---
 
@@ -52,49 +37,48 @@ In production (AWS), the ALB sits in front routing `/api/*` to the BFF and `/*` 
 
 ```
 fundflow/
-├── fundflow-app/          # React 18 dashboard
-├── fundflow-bff/          # Java 21 Spring Boot API
-├── fundflow-core/         # Python ETL seeder
-├── fundflow-infra/        # Multi-cloud infrastructure
-│   ├── aws/               # CloudFormation templates
-│   ├── gcp/               # GCP reference docs
-│   └── azure/             # Azure (planned)
-├── docker-compose.yml     # Local development
-├── .github/workflows/     # CI/CD pipelines
-└── .env                   # Local secrets (gitignored)
+├── fundflow-app/           # React 18 dashboard
+│   └── README.md
+├── fundflow-bff/           # Java 21 Spring Boot API
+│   └── README.md
+├── fundflow-core/          # Python ETL seeder
+│   └── README.md
+├── fundflow-infra/         # Multi-cloud infrastructure
+│   ├── aws/                # CloudFormation templates
+│   ├── gcp/                # GCP reference
+│   ├── azure/              # Azure Container Apps
+│   ├── CLOUD-SETUP-GUIDE.md  # All manual setup commands
+│   └── README.md
+├── .github/
+│   └── workflows/
+│       ├── ci.yml              # Build + test (all pushes)
+│       ├── deploy-aws.yml      # Deploy to AWS ECS
+│       ├── deploy-gcp.yml      # Deploy to GCP Cloud Run (disabled)
+│       ├── deploy-azure.yml    # Deploy to Azure Container Apps
+│       └── README.md
+├── docker-compose.yml      # Local development
+└── .env                    # Local secrets (gitignored)
 ```
 
 ---
 
 ## Quick start — local
 
-**Prerequisites:** Docker Desktop, Git
-
 ```bash
 git clone https://github.com/ziuld/fundflow.git
 cd fundflow
 echo "GEMINI_API_KEY=your_key_here" > .env
 docker compose up --build
-open http://localhost:3000
+# Open http://localhost:3000
 ```
 
 ---
 
-## Quick start — AWS deployment
+## Quick start — cloud deployment
 
-**Prerequisites:** AWS CLI, Docker, GitHub secrets configured
+See `fundflow-infra/CLOUD-SETUP-GUIDE.md` for full one-time setup instructions for each cloud.
 
-```bash
-# Deploy infrastructure (one time)
-cd fundflow-infra
-aws cloudformation create-stack --stack-name fundflow-vpc --template-body file://aws/vpc.yml --region eu-west-1
-aws cloudformation create-stack --stack-name fundflow-security --template-body file://aws/security.yml --capabilities CAPABILITY_NAMED_IAM --region eu-west-1
-aws cloudformation create-stack --stack-name fundflow-ecr --template-body file://aws/ecr.yml --region eu-west-1
-aws cloudformation create-stack --stack-name fundflow-ecs --template-body file://aws/ecs.yml --region eu-west-1
-
-# After infrastructure is ready, push to main to trigger CD
-git push origin main
-```
+After setup, deployment is fully automated — just push to `main`.
 
 ---
 
@@ -103,8 +87,8 @@ git push origin main
 ```
 GET    /api/v1/funds                    All funds
 GET    /api/v1/funds?category=Equity    Filter by category
-GET    /api/v1/funds?riskLevel=High     Filter by risk
-GET    /api/v1/funds/{id}              Single fund
+GET    /api/v1/funds?riskLevel=High     Filter by risk level
+GET    /api/v1/funds/{id}              Single fund by ID
 POST   /api/v1/funds                   Create fund
 PUT    /api/v1/funds/{id}              Update fund
 DELETE /api/v1/funds/{id}              Delete fund
@@ -116,19 +100,9 @@ GET    /actuator/health/liveness       Health check
 
 ## CI/CD pipelines
 
-| Workflow | Trigger | What it does |
-|----------|---------|-------------|
-| `ci.yml` | Every push | Build + test all services |
-| `deploy-aws.yml` | Push to main | Deploy to AWS ECS Fargate |
-| `deploy-gcp.yml` | Disabled | Deploy to GCP Cloud Run |
-
----
-
-## Destroy all AWS resources
-
-```bash
-aws cloudformation delete-stack --stack-name fundflow-ecs --region eu-west-1
-aws cloudformation delete-stack --stack-name fundflow-ecr --region eu-west-1
-aws cloudformation delete-stack --stack-name fundflow-security --region eu-west-1
-aws cloudformation delete-stack --stack-name fundflow-vpc --region eu-west-1
-```
+| Workflow | Trigger | Cloud |
+|----------|---------|-------|
+| `ci.yml` | Every push | — (build + test) |
+| `deploy-aws.yml` | Push to main | AWS ECS Fargate |
+| `deploy-gcp.yml` | Disabled | GCP Cloud Run |
+| `deploy-azure.yml` | Push to main | Azure Container Apps |
