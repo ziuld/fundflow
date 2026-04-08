@@ -55,7 +55,7 @@ pip install -r requirements.txt
 python seeder.py
 
 # Against MongoDB Atlas
-export MONGO_URI="mongodb+srv://user:pass@cluster.mongodb.net/fundflowdb"
+export MONGO_URI="mongodb+srv://user:pass@cluster.mongodb.net/database"
 python seeder.py
 ```
 
@@ -65,11 +65,11 @@ python seeder.py
 
 ```bash
 # Windows PowerShell
-$env:MONGO_URI="mongodb+srv://fundflow:PASSWORD@fundflow-cluster.jcnqxq3.mongodb.net/fundflowdb?appName=fundflow-cluster"
+$env:MONGO_URI="mongodb+srv://USER:PASSWORD@name-cluster.jcnqxq3.mongodb.net/database?appName=name-cluster"
 python seeder.py
 
 # Git Bash / Linux
-export MONGO_URI="mongodb+srv://fundflow:PASSWORD@fundflow-cluster.jcnqxq3.mongodb.net/fundflowdb?appName=fundflow-cluster"
+export MONGO_URI="mongodb+srv://USER:PASSWORD@name-cluster.jcnqxq3.mongodb.net/database?appName=name-cluster"
 python seeder.py
 ```
 
