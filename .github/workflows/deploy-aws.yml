@@ -39,6 +39,8 @@ jobs:
     permissions:
       id-token: write   # required for OIDC — allows GitHub to request AWS token
       contents: read
+    if: false  # DISABLED — remove this line to re-enable
+
 
     steps:
       - name: Checkout
