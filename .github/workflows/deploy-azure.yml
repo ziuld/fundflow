@@ -15,7 +15,7 @@
 #   AZURE_SUBSCRIPTION_ID → Azure subscription ID
 #
 # BFF URL is deterministic — always:
-#   https://fundflow-bff.proudriver-8dcfa047.westeurope.azurecontainerapps.io
+#   https://xxxxxxxxxxxxxxxxxx.azurecontainerapps.io
 # ─────────────────────────────────────────────────────────────────────────────
 name: Deploy — Azure Container Apps
 
@@ -30,13 +30,13 @@ env:
   CONTAINER_APP_ENV: fundflow-env
   BFF_APP_NAME: fundflow-bff
   APP_APP_NAME: fundflow-app
-  # Deterministic BFF URL — based on app name + environment default domain on secrets for easy access in React build
+  # Deterministic BFF URL — based on app name + environment default domain in secrets
 
 jobs:
   deploy:
     name: Deploy to Azure Container Apps
     runs-on: ubuntu-latest
-    #if : false  # DISABLED — remove this line to re-enable
+    #if : false  # DISABLED — remove this line to enable after testing
     permissions:
       id-token: write   # required for OIDC
       contents: read
