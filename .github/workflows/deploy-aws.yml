@@ -132,11 +132,12 @@ jobs:
           echo "React service stable"
 
       # ── Print deployment summary ───────────────────────────────────────────
+      # secrets AWS_ALB_URL
       - name: Deployment summary
         run: |
           echo "================================"
           echo "Deployment complete"
           echo "Commit : ${{ github.sha }}"
-          echo "App URL: ${{ secrets.AWS_ALB_URL }}"
-          echo "BFF URL: ${{ secrets.AWS_ALB_URL }}/api/v1/funds"
+          echo "App URL: ***********"
+          echo "BFF URL: ***********/api/v1/funds"
           echo "================================"

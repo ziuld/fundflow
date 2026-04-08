@@ -77,7 +77,7 @@ jobs:
             --name ${{ env.BFF_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/fundflow-bff:${{ github.sha }}
-          echo "BFF deployed at: ${{ secrets.AZURE_BFF_URL }}"
+      # echo "BFF deployed at: ${{ secrets.AZURE_BFF_URL }}"
 
       # ── React app: Build and deploy ────────────────────────────────────────
       # VITE_API_BASE_URL baked into JS bundle at compile time.
@@ -103,6 +103,8 @@ jobs:
             --image ${{ env.ACR_NAME }}.azurecr.io/fundflow-app:${{ github.sha }}
 
       # ── Verify deployments ─────────────────────────────────────────────────
+      # secrets AZURE_BFF_URL
+      # https://$APP_URL
       - name: Get app URLs
         run: |
           APP_URL=$(az containerapp show \
@@ -111,6 +113,6 @@ jobs:
             --query properties.configuration.ingress.fqdn -o tsv)
           echo "================================"
           echo "Commit : ${{ github.sha }}"
-          echo "BFF    : ${{ secrets.AZURE_BFF_URL }}"
-          echo "App    : https://$APP_URL"
+          echo "BFF    : ***********"
+          echo "App    : https://***********"
           echo "================================"

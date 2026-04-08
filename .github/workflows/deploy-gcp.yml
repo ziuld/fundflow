@@ -91,8 +91,8 @@ jobs:
           BFF_URL=$(gcloud run services describe fundflow-bff \
             --region=${{ env.GCP_REGION }} \
             --format='value(status.url)')
-          echo "url=$BFF_URL" >> $GITHUB_OUTPUT
-          echo "BFF deployed at: $BFF_URL"
+      # echo "url=$BFF_URL" >> $GITHUB_OUTPUT
+      # echo "BFF deployed at: $BFF_URL"
 
       - name: Build React image
         run: |
@@ -120,12 +120,15 @@ jobs:
             --max-instances=2 \
             --port=8080
 
+      # ── Print deployment URLs ─────────────────────────────────────────────────────────
+      # BFF : steps.bff-url.outputs.url
+      # App : $APP_URL
       - name: Print deployment URLs
         run: |
           APP_URL=$(gcloud run services describe fundflow-app \
             --region=${{ env.GCP_REGION }} \
             --format='value(status.url)')
           echo "================================"
-          echo "BFF : ${{ steps.bff-url.outputs.url }}"
-          echo "App : $APP_URL"
+          echo "BFF : ***********"
+          echo "App : ***********"
           echo "================================"
