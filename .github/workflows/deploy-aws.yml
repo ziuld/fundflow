@@ -27,6 +27,7 @@ name: Deploy — AWS ECS Fargate
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:    # allows manual trigger from GitHub Actions UI
 
 env:
   AWS_REGION: eu-west-1
@@ -36,7 +37,7 @@ jobs:
   deploy:
     name: Deploy to ECS Fargate
     runs-on: ubuntu-latest
-    if: false  # DISABLED — remove this line to re-enable
+    #if : false  # DISABLED — remove this line to re-enable
     permissions:
       id-token: write   # required for OIDC — allows GitHub to request AWS token
       contents: read

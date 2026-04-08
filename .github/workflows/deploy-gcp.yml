@@ -26,6 +26,7 @@ name: Deploy — GCP Cloud Run
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:    # allows manual trigger from GitHub Actions UIa
 
 env:
   GCP_REGION: europe-west1
@@ -36,7 +37,7 @@ jobs:
   deploy:
     name: Deploy to Cloud Run
     runs-on: ubuntu-latest
-    if: false  # DISABLED — remove this line to re-enable
+    #if : false  # DISABLED — remove this line to re-enable
 
     steps:
       - name: Checkout
