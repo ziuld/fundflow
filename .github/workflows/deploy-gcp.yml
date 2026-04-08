@@ -91,7 +91,7 @@ jobs:
           BFF_URL=$(gcloud run services describe fundflow-bff \
             --region=${{ env.GCP_REGION }} \
             --format='value(status.url)')
-      # echo "url=$BFF_URL" >> $GITHUB_OUTPUT
+          echo "url=$BFF_URL" >> $GITHUB_OUTPUT
       # echo "BFF deployed at: $BFF_URL"
 
       - name: Build React image
