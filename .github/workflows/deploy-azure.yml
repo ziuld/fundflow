@@ -22,6 +22,7 @@ name: Deploy — Azure Container Apps
 on:
   push:
     branches: [ main ]
+  workflow_dispatch:    # allows manual trigger from GitHub Actions UI
 
 env:
   AZURE_RESOURCE_GROUP: fundflow-rg
