@@ -1,3 +1,22 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# FundFlow — Deploy to Azure Container Apps
+#
+# Triggers on every push to main after CI passes.
+# Uses Workload Identity Federation (OIDC) — no static credentials.
+#
+# Deployment order:
+#   1. Authenticate to Azure via OIDC
+#   2. Build BFF image → push to ACR → deploy to Container Apps
+#   3. Build React image with BFF URL baked in → push to ACR → deploy
+#
+# Required GitHub secrets:
+#   AZURE_CLIENT_ID       → App registration client ID
+#   AZURE_TENANT_ID       → Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID → Azure subscription ID
+#
+# BFF URL is deterministic — always:
+#   https://fundflow-bff.proudriver-8dcfa047.westeurope.azurecontainerapps.io
+# ─────────────────────────────────────────────────────────────────────────────
 name: Deploy — Azure Container Apps
 
 on:
@@ -7,79 +26,90 @@ on:
 env:
   AZURE_RESOURCE_GROUP: fundflow-rg
   ACR_NAME: fundflowacr
+  CONTAINER_APP_ENV: fundflow-env
+  BFF_APP_NAME: fundflow-bff
+  APP_APP_NAME: fundflow-app
+  # Deterministic BFF URL — based on app name + environment default domain on secrets for easy access in React build
 
 jobs:
   deploy:
+    name: Deploy to Azure Container Apps
     runs-on: ubuntu-latest
-
+    if: false  # DISABLED — remove this line to enable after testing
     permissions:
-      id-token: write
+      id-token: write   # required for OIDC
       contents: read
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # OIDC login to Azure (no passwords)
-      - name: Azure Login
+      # ── Authentication ─────────────────────────────────────────────────────
+      # Workload Identity Federation — same OIDC concept as AWS
+      # No client secret stored anywhere — GitHub exchanges JWT for Azure token
+      - name: Login to Azure via OIDC
         uses: azure/login@v2
         with:
           client-id: ${{ secrets.AZURE_CLIENT_ID }}
           tenant-id: ${{ secrets.AZURE_TENANT_ID }}
           subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
 
-      # Login to ACR
-      - name: Login to ACR
-        run: az acr login --name ${{ env.ACR_NAME }}
+      - name: Login to Azure Container Registry
+        run: az acr login --name ${{ secrets.ACR_NAME }}
 
-      # -----------------------
-      # Build + Push BFF
-      # -----------------------
-      - name: Build & Push BFF
+      # ── BFF: Build and deploy ──────────────────────────────────────────────
+      - name: Build BFF image
         run: |
           docker build \
             -t ${{ env.ACR_NAME }}.azurecr.io/fundflow-bff:${{ github.sha }} \
+            -t ${{ env.ACR_NAME }}.azurecr.io/fundflow-bff:latest \
             ./fundflow-bff
 
+      - name: Push BFF image to ACR
+        run: |
           docker push ${{ env.ACR_NAME }}.azurecr.io/fundflow-bff:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/fundflow-bff:latest
 
-      # Deploy BFF
-      - name: Deploy BFF
+      - name: Deploy BFF to Container Apps
         run: |
           az containerapp update \
-            --name fundflow-bff \
+            --name ${{ env.BFF_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/fundflow-bff:${{ github.sha }}
+          echo "BFF deployed at: ${{ secrets.AZURE_BFF_URL }}"
 
-      # -----------------------
-      # Get BFF URL (internal)
-      # -----------------------
-      - name: Resolve BFF URL
-        id: bff
-        run: |
-          DOMAIN=$(az containerapp env show \
-            --name fundflow-env \
-            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
-            --query properties.defaultDomain -o tsv)
-
-          echo "url=https://fundflow-bff.$DOMAIN" >> $GITHUB_OUTPUT
-
-      # -----------------------
-      # Build + Push Frontend
-      # -----------------------
-      - name: Build & Push Frontend
+      # ── React app: Build and deploy ────────────────────────────────────────
+      # VITE_API_BASE_URL baked into JS bundle at compile time.
+      # BFF URL is deterministic so no dynamic fetching needed.
+      - name: Build React image with BFF URL
         run: |
           docker build \
-            --build-arg VITE_API_BASE_URL=${{ steps.bff.outputs.url }} \
+            --build-arg VITE_API_BASE_URL=${{ secrets.AZURE_BFF_URL }} \
             -t ${{ env.ACR_NAME }}.azurecr.io/fundflow-app:${{ github.sha }} \
+            -t ${{ env.ACR_NAME }}.azurecr.io/fundflow-app:latest \
             ./fundflow-app
 
+      - name: Push React image to ACR
+        run: |
           docker push ${{ env.ACR_NAME }}.azurecr.io/fundflow-app:${{ github.sha }}
+          docker push ${{ env.ACR_NAME }}.azurecr.io/fundflow-app:latest
 
-      # Deploy frontend
-      - name: Deploy Frontend
+      - name: Deploy React app to Container Apps
         run: |
           az containerapp update \
-            --name fundflow-app \
+            --name ${{ env.APP_APP_NAME }} \
             --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
             --image ${{ env.ACR_NAME }}.azurecr.io/fundflow-app:${{ github.sha }}
+
+      # ── Verify deployments ─────────────────────────────────────────────────
+      - name: Get app URLs
+        run: |
+          APP_URL=$(az containerapp show \
+            --name ${{ env.APP_APP_NAME }} \
+            --resource-group ${{ env.AZURE_RESOURCE_GROUP }} \
+            --query properties.configuration.ingress.fqdn -o tsv)
+          echo "================================"
+          echo "Commit : ${{ github.sha }}"
+          echo "BFF    : ${{ secrets.AZURE_BFF_URL }}"
+          echo "App    : https://$APP_URL"
+          echo "================================"
