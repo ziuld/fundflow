@@ -131,3 +131,4 @@ Create `.github/workflows/deploy-azure.yml` following the same pattern:
 ```
 
 Azure uses Workload Identity Federation — same OIDC concept as AWS, no static credentials.
+
