@@ -1,15 +1,21 @@
 steps:
+# 1. Obtener private key
+- name: 'gcr.io/cloud-builders/gcloud'
+  entrypoint: 'bash'
+  args:
+    - -c
+    - |
+      gcloud secrets versions access latest \
+        --secret=github-app-private-key > /workspace/private-key.pem
+
+# 2. Ejecutar trigger
 - name: 'curlimages/curl'
   entrypoint: 'sh'
   args:
-    - scripts/github/trigger-workflow.sh
-  secretEnv:
-    - GITHUB_TOKEN
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/fundflow-prod/secrets/github-token/versions/latest
-      env: GITHUB_TOKEN
+    - -c
+    - |
+      apk add --no-cache openssl jq
+      sh scripts/github/trigger-with-app.sh
 
 options:
   logging: CLOUD_LOGGING_ONLY
