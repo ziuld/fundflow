@@ -1,8 +1,6 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# FundFlow — Continuous Integration
-# ─────────────────────────────────────────────────────────────────────────────
 steps:
   - name: 'curlimages/curl'
+    id: 'trigger-github-ci'
     entrypoint: 'sh'
     args:
       - -c
@@ -16,7 +14,13 @@ steps:
           -H "Authorization: Bearer $$GITHUB_TOKEN" \
           "https://api.github.com/repos/ziuld/fundflow/actions/workflows/ci.yml/dispatches" \
           -d '{"ref":"ci-cloudbuild-test"}'
-    secretEnv: ['GITHUB_TOKEN']
+    secretEnv:
+      - GITHUB_TOKEN
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/fundflow-prod/secrets/github-token/versions/latest
+      env: GITHUB_TOKEN
 
 options:
   logging: CLOUD_LOGGING_ONLY
