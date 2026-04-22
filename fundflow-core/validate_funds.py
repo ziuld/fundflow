@@ -2,7 +2,7 @@ import csv
 import sys
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+BASE_DIR = Path(__file__).resolve().parent
 DATA_FILES = [
     BASE_DIR / "data/funds.csv",
     BASE_DIR / "data/funds_supplemental.csv"
