@@ -112,16 +112,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Validate fund CSVs
-        run: |
-          python -c "
-          import csv
-          files = ['fundflow-core/data/funds.csv', 'fundflow-core/data/funds_supplemental.csv']
-          for f in files:
-              rows = list(csv.DictReader(open(f)))
-              assert len(rows) > 0, f'{f} is empty'
-              assert 'isin' in rows[0], f'{f} missing isin column'
-              print(f'{f}: OK ({len(rows)} funds)')
-          "
+        working-directory: ./fundflow-core
+        run: python validate_funds.py
 
   # ───────────────────────────────────────────────────────────────────────────
   # JOB 4 — Docker Compose: validate config
