@@ -1,16 +1,20 @@
 steps:
-  - name: 'curlimages/curl'
-    entrypoint: 'bash'
-    args:
-      - -c
-      - |
-        curl -X POST \
-          -H "Authorization: Bearer $$GITHUB_TOKEN" \
-          -H "Accept: application/vnd.github+json" \
-          https://api.github.com/repos/ziuld/fundflow/actions/workflows/ci.yml/dispatches \
-          -d '{"ref":"ci-cloudbuild-test"}'
-    secretEnv:
-      - GITHUB_TOKEN
+- name: 'curlimages/curl'
+  entrypoint: 'bash'
+  args:
+    - -c
+    - |
+      set -x
+
+      curl -v --fail \
+        -X POST \
+        -H "Authorization: Bearer $$GITHUB_TOKEN" \
+        -H "Accept: application/vnd.github+json" \
+        -H "Content-Type: application/json" \
+        https://api.github.com/repos/ziuld/fundflow/actions/workflows/ci.yml/dispatches \
+        --data-raw '{"ref":"ci-cloudbuild-test"}'
+  secretEnv:
+    - GITHUB_TOKEN
 
 availableSecrets:
   secretManager:
