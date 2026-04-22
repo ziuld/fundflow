@@ -1,6 +1,6 @@
 steps:
 - name: 'curlimages/curl'
-  entrypoint: 'bash'
+  entrypoint: 'sh'
   args:
     - -c
     - |
@@ -13,7 +13,6 @@ steps:
         -H "Content-Type: application/json" \
         https://api.github.com/repos/ziuld/fundflow/actions/workflows/254786445/dispatches \
         --data-raw '{"ref":"ci-cloudbuild-test"}'
-        --write-out "\nHTTP_STATUS:%{http_code}\n"
   secretEnv:
     - GITHUB_TOKEN
 
