@@ -18,5 +18,5 @@ steps:
 
 availableSecrets:
   secretManager:
-    - versionName: projects/YOUR_PROJECT_ID/secrets/github-token/versions/latest
+    - versionName: projects/fundflow-prod/secrets/github-token/versions/latest
       env: 'GITHUB_TOKEN'
