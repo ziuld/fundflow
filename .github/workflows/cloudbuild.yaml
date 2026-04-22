@@ -4,22 +4,8 @@ steps:
   args:
     - -c
     - |
-      set -x
-
-      curl -v --fail-with-body \
-        -X POST \
-        -H "Authorization: Bearer $$GITHUB_TOKEN" \
-        -H "Accept: application/vnd.github+json" \
-        -H "Content-Type: application/json" \
-        https://api.github.com/repos/ziuld/fundflow/actions/workflows/254786445/dispatches \
-        --data-raw '{"ref":"ci-cloudbuild-test"}'
-  secretEnv:
-    - GITHUB_TOKEN
-
-availableSecrets:
-  secretManager:
-    - versionName: projects/fundflow-prod/secrets/github-token/versions/latest
-      env: GITHUB_TOKEN
+      chmod +x scripts/github/trigger-workflow.sh
+      scripts/github/trigger-workflow.sh
 
 options:
   logging: CLOUD_LOGGING_ONLY

@@ -13,6 +13,11 @@ name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        required: false
+      commit:
+        required: false
 
 jobs:
 
@@ -26,6 +31,8 @@ jobs:
     name: BFF — Build & Test
     runs-on: ubuntu-latest
     steps:
+      - run: echo "Triggered by ${{ github.event.inputs.source }}"
+      - run: echo "Commit ${{ github.event.inputs.commit }}"
       - name: Checkout
         uses: actions/checkout@v4
 
