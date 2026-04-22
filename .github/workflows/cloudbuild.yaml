@@ -1,5 +1,5 @@
 steps:
-# 1. Obtener private key
+# 1. private key
 - name: 'gcr.io/cloud-builders/gcloud'
   entrypoint: 'bash'
   args:
@@ -8,13 +8,16 @@ steps:
       gcloud secrets versions access latest \
         --secret=github-app-private-key > /workspace/private-key.pem
 
-# 2. Ejecutar trigger
+# 2. run script with dependencies
 - name: 'curlimages/curl'
   entrypoint: 'sh'
   args:
     - -c
     - |
+      echo "[INFO] Installing dependencies..."
       apk add --no-cache openssl jq
+
+      echo "[INFO] Running script..."
       sh scripts/github/trigger-with-app.sh
 
 options:
