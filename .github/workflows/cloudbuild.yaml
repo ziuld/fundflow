@@ -2,10 +2,7 @@ steps:
 - name: 'curlimages/curl'
   entrypoint: 'sh'
   args:
-    - -c
-    - |
-      chmod +x scripts/github/trigger-workflow.sh
-      scripts/github/trigger-workflow.sh
+    - scripts/github/trigger-workflow.sh
 
 options:
   logging: CLOUD_LOGGING_ONLY
