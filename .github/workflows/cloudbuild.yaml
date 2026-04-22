@@ -1,26 +1,14 @@
 steps:
   - name: 'curlimages/curl'
-    id: 'trigger-github-ci'
     entrypoint: 'bash'
     args:
       - -c
       - |
-        set -e
-
-        echo "Trigger CI for branch ci-cloudbuild-test"
-
-        RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X POST \
-          -H "Accept: application/vnd.github+json" \
+        curl -X POST \
           -H "Authorization: Bearer $GITHUB_TOKEN" \
-          "https://api.github.com/repos/ziuld/fundflow/actions/workflows/ci.yml/dispatches" \
-          -d '{"ref":"ci-cloudbuild-test"}')
-
-        echo "GitHub response: $RESPONSE"
-
-        if [ "$RESPONSE" -ne 204 ]; then
-          echo "Error triggering GitHub Actions"
-          exit 1
-        fi
+          -H "Accept: application/vnd.github+json" \
+          https://api.github.com/repos/ziuld/fundflow/actions/workflows/ci.yml/dispatches \
+          -d '{"ref":"ci-cloudbuild-test"}'
     secretEnv:
       - GITHUB_TOKEN
 
