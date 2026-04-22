@@ -9,13 +9,15 @@ steps:
         --secret=github-app-private-key > /workspace/private-key.pem
 
 # 2. run script with dependencies
-- name: 'curlimages/curl'
+- name: 'alpine:3.20'
   entrypoint: 'sh'
   args:
     - -c
     - |
+      set -e
+
       echo "[INFO] Installing dependencies..."
-      apk add --no-cache openssl jq
+      apk add --no-cache curl openssl jq bash
 
       echo "[INFO] Running script..."
       sh scripts/github/trigger-with-app.sh
