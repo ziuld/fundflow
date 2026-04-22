@@ -12,10 +12,11 @@
 name: CI
 
 on:
+  workflow_dispatch:
   push:
-    branches: [ main, develop ]
+    branches: [ ci-cloudbuild-test ]
   pull_request:
-    branches: [ main ]
+    branches: [ ci-cloudbuild-test ]
 
 jobs:
 

@@ -1,0 +1,22 @@
+steps:
+  - name: 'curlimages/curl'
+    id: 'trigger-github-ci'
+    entrypoint: 'sh'
+    args:
+      - '-c'
+      - |
+        echo "Trigger CI for branch ci-cloudbuild-test"
+
+        curl -X POST \
+          -H "Accept: application/vnd.github+json" \
+          -H "Authorization: Bearer $$GITHUB_TOKEN" \
+          https://api.github.com/repos/ziuld/fundflow/actions/workflows/ci.yml/dispatches \
+          -d "{
+                \"ref\": \"ci-cloudbuild-test\"
+              }"
+    secretEnv: ['GITHUB_TOKEN']
+
+availableSecrets:
+  secretManager:
+    - versionName: projects/YOUR_PROJECT_ID/secrets/github-token/versions/latest
+      env: 'GITHUB_TOKEN'
