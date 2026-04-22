@@ -4,8 +4,8 @@ steps:
   args:
     - -c
     - |
-      chmod +x scripts/trigger_github_workflow.sh
-      scripts/trigger_github_workflow.sh
+      chmod +x scripts/github/trigger-workflow.sh
+      scripts/github/trigger-workflow.sh
 
 options:
   logging: CLOUD_LOGGING_ONLY
