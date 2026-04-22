@@ -3,7 +3,7 @@ steps:
   entrypoint: 'sh'
   args:
     - scripts/github/trigger-workflow.sh
-    secretEnv:
+  secretEnv:
     - GITHUB_TOKEN
 
 availableSecrets:
