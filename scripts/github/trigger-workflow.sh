@@ -8,7 +8,7 @@ echo "[INFO] Triggering GitHub workflow..."
 
 curl -sS --fail-with-body \
   -X POST \
-  -H "Authorization: Bearer $$GITHUB_TOKEN" \
+  -H "Authorization: Bearer $GITHUB_TOKEN" \
   -H "Accept: application/vnd.github+json" \
   -H "Content-Type: application/json" \
   "https://api.github.com/repos/ziuld/fundflow/actions/workflows/${WORKFLOW_ID}/dispatches" \
